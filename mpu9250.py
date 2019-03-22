@@ -1,6 +1,9 @@
 import smbus
 import time
 import numpy as np
+import sys
+from scipy import linalg
+
 
 ## MPU9250 Default I2C slave address
 SLAVE_ADDRESS        = 0x68
@@ -87,7 +90,7 @@ class MPU9250:
         self.configMPU9250(GFS_250, AFS_2G, AK8963_BIT_16, AK8963_MODE_C8HZ)
 
         # initialize values
-        self.F   = F
+        self.F   = 1
         self.b   = np.zeros([3, 1])
         self.A_1 = np.eye(3)
 
@@ -216,7 +219,6 @@ class MPU9250:
 
         # check data ready
         drdy = self.bus.read_byte_data(AK8963_SLAVE_ADDRESS, AK8963_ST1)
-        print(drdy & 0x01)
         if drdy & 0x01 :
             data = self.bus.read_i2c_block_data(AK8963_SLAVE_ADDRESS, AK8963_MAGNET_OUT, 7)
 
@@ -251,7 +253,7 @@ class MPU9250:
             s : list
                 The sample in uT, [x,y,z] (corrected if performed calibration).
         '''
-        a = readMagnet()
+        a = self.readMagnet()
         c = a['x'],a['y'],a['z']
         s = np.array(c).reshape(3, 1)
         s = np.dot(self.A_1, s - self.b)
@@ -266,7 +268,7 @@ class MPU9250:
             s = []
             n = 0
             while True:
-                s.append(self.sensor.read())
+                s.append(self.read())
                 n += 1
                 sys.stdout.write('\rTotal: %d' % n)
                 sys.stdout.flush()
@@ -363,9 +365,9 @@ def collect(fn, fs=10):
         f.write('x,y,z\n')
         try:
             while True:
-                s = m.read()
+                s = test.read()
                 f.write('%.1f,%.1f,%.1f\n' % (s[0], s[1], s[2]))
-                sleep(1./fs)
+                time.sleep(1./fs)
         except KeyboardInterrupt: pass
 
 test = MPU9250()
