@@ -54,7 +54,7 @@ class GPS:
                     self.speed = self.data_stream.speed
                     if (self.speed != "n/a"):
                         return True
-            
+
         return False
 
     def get_speed(self):
@@ -82,7 +82,7 @@ class GPS:
 
     def get_time(self):
         return self.data_stream.time
-    
+
     def update_time(self):
         t = self.get_time()
         split = t.split("-")
@@ -90,7 +90,7 @@ class GPS:
         month = split[1]
         day = split[2][:2]
         tim = t.split("T")[1][:8]
-        
+
         gmt = pytz.timezone('GMT')
         eastern = pytz.timezone('US/Eastern')
         d = datetime.strptime(day + "/" + month + "/" + year + " " + tim + " GMT", '%d/%m/%Y %H:%M:%S GMT')
@@ -99,8 +99,8 @@ class GPS:
         split = str(dateeast).split(" ")
         os.system("sudo date +%D -s " + split[0])
         os.system("sudo date +%T -s " + split[1][:-6])
-        
-        
+
+
     def i_dst(self, day, month, dow):
         if month < 3 or month > 11:
             return False
@@ -112,20 +112,20 @@ class GPS:
                 return prev_sun >= 8
             else:
                 return prev_sun <= 0
-            
 
 
-test = GPS()
-test.update()
-test.update_time()
+
+gps = GPS()
+gps.update()
+gps.update_time()
 while True:
-    test.update()
-    
+    gps.update()
+
     print (count)
-    print("Time: ", test.get_time())
-    print("Speed: %.2f" % test.get_speed())
-    print("Average Speed: %.2f" % test.get_average_speed())
-    print("Distance Traveled: %.2f" % test.get_distance_traveled())
+    print("Time: ", gps.get_time())
+    print("Speed: %.2f" % gps.get_speed())
+    print("Average Speed: %.2f" % gps.get_average_speed())
+    print("Distance Traveled: %.2f" % gps.get_distance_traveled())
     print()
     count += 1
     time.sleep(1)
