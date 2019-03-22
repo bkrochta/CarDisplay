@@ -1,4 +1,5 @@
 import smbus
+import time
 
 ## MPU9250 Default I2C slave address
 SLAVE_ADDRESS        = 0x68
@@ -87,7 +88,7 @@ class MPU9250:
     #  @param [in] self The object pointer.
     #  @param [in] gfs Gyro Full Scale Select(default:GFS_250[+250dps])
     #  @param [in] afs Accel Full Scale Select(default:AFS_2G[2g])
-    def configMPU9250(self, gfs, afs, mfs):
+    def configMPU9250(self, gfs, afs, mfs, mode):
         if gfs == GFS_250:
             self.gres = 250.0/32768.0
         elif gfs == GFS_500:
@@ -158,3 +159,73 @@ class MPU9250:
         # set scale&continous mode
         bus.write_byte_data(self.address, AK8963_CNTL1, (mfs<<4|mode))
         time.sleep(0.1)
+
+    ## Read accelerometer
+    #  @param [in] self The object pointer.
+    #  @retval x : x-axis data
+    #  @retval y : y-axis data
+    #  @retval z : z-axis data
+    def readAccel(self):
+        data = bus.read_i2c_block_data(self.address, ACCEL_OUT, 6)
+        x = self.dataConv(data[1], data[0])
+        y = self.dataConv(data[3], data[2])
+        z = self.dataConv(data[5], data[4])
+
+        x = round(x*self.ares, 3)
+        y = round(y*self.ares, 3)
+        z = round(z*self.ares, 3)
+
+        return {"x":x, "y":y, "z":z}
+
+    ## Read gyro
+    #  @param [in] self The object pointer.
+    #  @retval x : x-gyro data
+    #  @retval y : y-gyro data
+    #  @retval z : z-gyro data
+    def readGyro(self):
+        data = bus.read_i2c_block_data(self.address, GYRO_OUT, 6)
+
+        x = self.dataConv(data[1], data[0])
+        y = self.dataConv(data[3], data[2])
+        z = self.dataConv(data[5], data[4])
+
+        x = round(x*self.gres, 3)
+        y = round(y*self.gres, 3)
+        z = round(z*self.gres, 3)
+
+        return {"x":x, "y":y, "z":z}
+
+    ## Read magneto
+    #  @param [in] self The object pointer.
+    #  @retval x : X-magneto data
+    #  @retval y : y-magneto data
+    #  @retval z : Z-magneto data
+    def readMagnet(self):
+        x=0
+        y=0
+        z=0
+
+        # check data ready
+        drdy = bus.read_byte_data(self.address, AK8963_ST1)
+        if drdy & 0x01 :
+            data = bus.read_i2c_block_data(self.address, AK8963_MAGNET_OUT, 7)
+
+            # check overflow
+            if (data[6] & 0x08)!=0x08:
+                x = self.dataConv(data[0], data[1])
+                y = self.dataConv(data[2], data[3])
+                z = self.dataConv(data[4], data[5])
+
+                x = round(x * self.mres * self.magXcoef, 3)
+                y = round(y * self.mres * self.magYcoef, 3)
+                z = round(z * self.mres * self.magZcoef, 3)
+
+        return {"x":x, "y":y, "z":z}
+
+test = MPU9250()
+while True:
+    print("Accel ", test.readAccel())
+    print("Gyro ", test.readGyro())
+    print("Magnet ", test.readMagnet())
+    print()
+    
