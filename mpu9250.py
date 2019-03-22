@@ -3,6 +3,7 @@ import time
 import numpy as np
 import sys
 from scipy import linalg
+import pickle
 
 
 ## MPU9250 Default I2C slave address
@@ -91,8 +92,13 @@ class MPU9250:
 
         # initialize values
         self.F   = 1
-        self.b   = np.zeros([3, 1])
-        self.A_1 = np.eye(3)
+        try:
+            with open('data.ser') as f:
+                self.b, self.A_1 = pickle.load(f)
+        except IOError as e:
+            print("No calibration data")
+            self.b   = np.zeros([3, 1])
+            self.A_1 = np.eye(3)
 
     ## Configure MPU-9250
     #  @param [in] self The object pointer.
@@ -283,8 +289,10 @@ class MPU9250:
         # note: some implementations of sqrtm return complex type, taking real
         M_1 = linalg.inv(M)
         self.b = -np.dot(M_1, n)
-        self.A_1 = np.real(self.F / np.sqrt(np.dot(n.T, np.dot(M_1, n)) - d) *
-                           linalg.sqrtm(M))
+        self.A_1 = np.real(self.F / np.sqrt(np.dot(n.T, np.dot(M_1, n)) - d) * linalg.sqrtm(M))
+        with open('data.ser', 'w') as f:
+            pickle.dump([b, A_1], f)
+
 
     def __ellipsoid_fit(self, s):
         ''' Estimate ellipsoid parameters from a set of points.
@@ -371,15 +379,14 @@ def collect(fn, fs=10):
         except KeyboardInterrupt: pass
 
 test = MPU9250()
-collect('ncal.csv')
 test.calibrate()
-collect('cal.csv')
 
-"""
+
 while True:
     print("Accel ", test.readAccel())
     print("Gyro ", test.readGyro())
-    print("Magnet ", test.readMagnet())
+    mag = test.read()
+    print("Magnet ", mag)
+    print(math.atan2(mag[1],mag[0])*(180/math/pi))
     print()
     time.sleep(.5)
-"""
