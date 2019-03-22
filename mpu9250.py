@@ -1,8 +1,11 @@
 import smbus
 import time
+import numpy as np
 
 ## MPU9250 Default I2C slave address
 SLAVE_ADDRESS        = 0x68
+## AK8963 I2C slave address
+AK8963_SLAVE_ADDRESS = 0x0C
 ## Device id
 DEVICE_ID            = 0x71
 
@@ -74,19 +77,26 @@ AK8963_MODE_C100HZ = 0x06
 AK8963_BIT_14 = 0x00
 ## 16bit output
 AK8963_BIT_16 = 0x01
-bus = smbus.SMBus(1)
 
 class MPU9250:
     ## Constructor
     #  @param [in] address MPU-9250 I2C slave address default:0x68
     def __init__(self, address=SLAVE_ADDRESS):
+        self.bus = smbus.SMBus(1)
         self.address = address
         self.configMPU9250(GFS_250, AFS_2G, AK8963_BIT_16, AK8963_MODE_C8HZ)
+
+        # initialize values
+        self.F   = F
+        self.b   = np.zeros([3, 1])
+        self.A_1 = np.eye(3)
 
     ## Configure MPU-9250
     #  @param [in] self The object pointer.
     #  @param [in] gfs Gyro Full Scale Select(default:GFS_250[+250dps])
     #  @param [in] afs Accel Full Scale Select(default:AFS_2G[2g])
+    #  @param [in] mfs Magneto Scale Select(default:AK8963_BIT_16[16bit])
+    #  @param [in] mode Magneto Mode Select(default:AK8963_MODE_C8HZ[Continous 8Hz])
     def configMPU9250(self, gfs, afs, mfs, mode):
         if gfs == GFS_250:
             self.gres = 250.0/32768.0
@@ -113,50 +123,50 @@ class MPU9250:
 
         ## Configure MPU9250
         # sleep off
-        bus.write_byte_data(self.address, PWR_MGMT_1, 0x00)
+        self.bus.write_byte_data(self.address, PWR_MGMT_1, 0x00)
         time.sleep(0.1)
         # auto select clock source
-        bus.write_byte_data(self.address, PWR_MGMT_1, 0x01)
+        self.bus.write_byte_data(self.address, PWR_MGMT_1, 0x01)
         time.sleep(0.1)
 
         ## configure accelerometer
         # accel full scale select
-        bus.write_byte_data(self.address, ACCEL_CONFIG, afs << 3)
+        self.bus.write_byte_data(self.address, ACCEL_CONFIG, afs << 3)
         # gyro full scale select
-        bus.write_byte_data(self.address, GYRO_CONFIG, gfs << 3)
+        self.bus.write_byte_data(self.address, GYRO_CONFIG, gfs << 3)
         # A_DLPFCFG internal low pass filter for accelerometer to 10.2 Hz
-        bus.write_byte_data(self.address, ACCEL_CONFIG_2, 0x05)
+        self.bus.write_byte_data(self.address, ACCEL_CONFIG_2, 0x05)
         # DLPF_CFG internal low pass filter for accelerometer to 10 Hz
-        bus.write_byte_data(self.address, CONFIG, 0x05)
+        self.bus.write_byte_data(self.address, CONFIG, 0x05)
         """
         # sample rate divider
-        bus.write_byte_data(self.address, SMPLRT_DIV, 0x04)
+        self.bus.write_byte_data(self.address, SMPLRT_DIV, 0x04)
         """
-        # magnetometer set power down mode
-        bus.write_byte_data(self.address, 0x6A, 0x00)
+        # magnetometer allow change to bypass multiplexer
+        self.bus.write_byte_data(self.address, USER_CTRL, 0x00)
         time.sleep(0.01)
 
         # BYPASS_EN turn on bypass multiplexer
-        bus.write_byte_data(self.address, INT_PIN_CFG, 0x02)
+        self.bus.write_byte_data(self.address, INT_PIN_CFG, 0x02)
         time.sleep(0.1)
 
         # set read FuseROM mode
-        bus.write_byte_data(0x0C, AK8963_CNTL1, 0x1F)
+        self.bus.write_byte_data(AK8963_SLAVE_ADDRESS, AK8963_CNTL1, 0x1F)
         time.sleep(0.1)
 
         # read coef data
-        data = bus.read_i2c_block_data(0x0C, AK8963_ASAX, 3)
+        data = self.bus.read_i2c_block_data(AK8963_SLAVE_ADDRESS, AK8963_ASAX, 3)
 
         self.magXcoef = (data[0] - 128) / 256.0 + 1.0
         self.magYcoef = (data[1] - 128) / 256.0 + 1.0
         self.magZcoef = (data[2] - 128) / 256.0 + 1.0
 
         # set power down mode
-        bus.write_byte_data(0x0C, AK8963_CNTL1, 0x00)
+        self.bus.write_byte_data(AK8963_SLAVE_ADDRESS, AK8963_CNTL1, 0x00)
         time.sleep(0.1)
 
         # set scale&continous mode
-        bus.write_byte_data(0x0C, AK8963_CNTL1, (mfs<<4|mode))
+        self.bus.write_byte_data(AK8963_SLAVE_ADDRESS, AK8963_CNTL1, (mfs<<4|mode))
         time.sleep(0.1)
 
     ## Read accelerometer
@@ -165,7 +175,7 @@ class MPU9250:
     #  @retval y : y-axis data
     #  @retval z : z-axis data
     def readAccel(self):
-        data = bus.read_i2c_block_data(self.address, ACCEL_OUT, 6)
+        data = self.bus.read_i2c_block_data(self.address, ACCEL_OUT, 6)
         x = self.dataConv(data[1], data[0])
         y = self.dataConv(data[3], data[2])
         z = self.dataConv(data[5], data[4])
@@ -182,7 +192,7 @@ class MPU9250:
     #  @retval y : y-gyro data
     #  @retval z : z-gyro data
     def readGyro(self):
-        data = bus.read_i2c_block_data(self.address, GYRO_OUT, 6)
+        data = self.bus.read_i2c_block_data(self.address, GYRO_OUT, 6)
 
         x = self.dataConv(data[1], data[0])
         y = self.dataConv(data[3], data[2])
@@ -205,10 +215,10 @@ class MPU9250:
         z=0
 
         # check data ready
-        drdy = bus.read_byte_data(0x0C, AK8963_ST1)
+        drdy = self.bus.read_byte_data(AK8963_SLAVE_ADDRESS, AK8963_ST1)
         print(drdy & 0x01)
         if drdy & 0x01 :
-            data = bus.read_i2c_block_data(0x0C, AK8963_MAGNET_OUT, 7)
+            data = self.bus.read_i2c_block_data(AK8963_SLAVE_ADDRESS, AK8963_MAGNET_OUT, 7)
 
             # check overflow
             if (data[6] & 0x08)!=0x08:
@@ -233,10 +243,141 @@ class MPU9250:
             value -= (1<<16)
         return value
 
+    def read(self):
+        ''' Get a sample.
+
+            Returns
+            -------
+            s : list
+                The sample in uT, [x,y,z] (corrected if performed calibration).
+        '''
+        a = readMagnet()
+        c = a['x'],a['y'],a['z']
+        s = np.array(c).reshape(3, 1)
+        s = np.dot(self.A_1, s - self.b)
+        return [s[0,0], s[1,0], s[2,0]]
+
+    def calibrate(self):
+        ''' Performs calibration. '''
+
+        print('Collecting samples (Ctrl-C to stop and perform calibration)')
+
+        try:
+            s = []
+            n = 0
+            while True:
+                s.append(self.sensor.read())
+                n += 1
+                sys.stdout.write('\rTotal: %d' % n)
+                sys.stdout.flush()
+        except KeyboardInterrupt:
+            pass
+
+        # ellipsoid fit
+        s = np.array(s).T
+        M, n, d = self.__ellipsoid_fit(s)
+
+        # calibration parameters
+        # note: some implementations of sqrtm return complex type, taking real
+        M_1 = linalg.inv(M)
+        self.b = -np.dot(M_1, n)
+        self.A_1 = np.real(self.F / np.sqrt(np.dot(n.T, np.dot(M_1, n)) - d) *
+                           linalg.sqrtm(M))
+
+    def __ellipsoid_fit(self, s):
+        ''' Estimate ellipsoid parameters from a set of points.
+
+            Parameters
+            ----------
+            s : array_like
+              The samples (M,N) where M=3 (x,y,z) and N=number of samples.
+
+            Returns
+            -------
+            M, n, d : array_like, array_like, float
+              The ellipsoid parameters M, n, d.
+
+            References
+            ----------
+            .. [1] Qingde Li; Griffiths, J.G., "Least squares ellipsoid specific
+               fitting," in Geometric Modeling and Processing, 2004.
+               Proceedings, vol., no., pp.335-340, 2004
+        '''
+
+        # D (samples)
+        D = np.array([s[0]**2., s[1]**2., s[2]**2.,
+                      2.*s[1]*s[2], 2.*s[0]*s[2], 2.*s[0]*s[1],
+                      2.*s[0], 2.*s[1], 2.*s[2], np.ones_like(s[0])])
+
+        # S, S_11, S_12, S_21, S_22 (eq. 11)
+        S = np.dot(D, D.T)
+        S_11 = S[:6,:6]
+        S_12 = S[:6,6:]
+        S_21 = S[6:,:6]
+        S_22 = S[6:,6:]
+
+        # C (Eq. 8, k=4)
+        C = np.array([[-1,  1,  1,  0,  0,  0],
+                      [ 1, -1,  1,  0,  0,  0],
+                      [ 1,  1, -1,  0,  0,  0],
+                      [ 0,  0,  0, -4,  0,  0],
+                      [ 0,  0,  0,  0, -4,  0],
+                      [ 0,  0,  0,  0,  0, -4]])
+
+        # v_1 (eq. 15, solution)
+        E = np.dot(linalg.inv(C),
+                   S_11 - np.dot(S_12, np.dot(linalg.inv(S_22), S_21)))
+
+        E_w, E_v = np.linalg.eig(E)
+
+        v_1 = E_v[:, np.argmax(E_w)]
+        if v_1[0] < 0: v_1 = -v_1
+
+        # v_2 (eq. 13, solution)
+        v_2 = np.dot(np.dot(-np.linalg.inv(S_22), S_21), v_1)
+
+        # quadric-form parameters
+        M = np.array([[v_1[0], v_1[3], v_1[4]],
+                      [v_1[3], v_1[1], v_1[5]],
+                      [v_1[4], v_1[5], v_1[2]]])
+        n = np.array([[v_2[0]],
+                      [v_2[1]],
+                      [v_2[2]]])
+        d = v_2[3]
+
+        return M, n, d
+
+def collect(fn, fs=10):
+    ''' Collect magnetometer samples
+
+        Parameters
+        ----------
+        fn : str
+            Output file.
+        fs : int (optional)
+            Approximate sampling frequency (Hz), default 10 Hz.
+    '''
+
+    print('Collecting [%s]. Ctrl-C to finish' % fn)
+    with open(fn, 'w') as f:
+        f.write('x,y,z\n')
+        try:
+            while True:
+                s = m.read()
+                f.write('%.1f,%.1f,%.1f\n' % (s[0], s[1], s[2]))
+                sleep(1./fs)
+        except KeyboardInterrupt: pass
+
 test = MPU9250()
+collect('ncal.csv')
+test.calibrate()
+collect('cal.csv')
+
+"""
 while True:
     print("Accel ", test.readAccel())
     print("Gyro ", test.readGyro())
     print("Magnet ", test.readMagnet())
     print()
     time.sleep(.5)
+"""
