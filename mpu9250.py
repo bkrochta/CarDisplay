@@ -133,7 +133,7 @@ class MPU9250:
         bus.write_byte_data(self.address, SMPLRT_DIV, 0x04)
         """
         # magnetometer set power down mode
-        bus.write_byte_data(self.address, AK8963_CNTL1, 0x00)
+        bus.write_byte_data(self.address, 0x6A, 0x00)
         time.sleep(0.01)
 
         # BYPASS_EN turn on bypass multiplexer
@@ -141,22 +141,22 @@ class MPU9250:
         time.sleep(0.1)
 
         # set read FuseROM mode
-        bus.write_byte_data(self.address, AK8963_CNTL1, 0x1F)
+        bus.write_byte_data(0x0C, AK8963_CNTL1, 0x1F)
         time.sleep(0.1)
 
         # read coef data
-        data = bus.read_i2c_block_data(self.address, AK8963_ASAX, 3)
+        data = bus.read_i2c_block_data(0x0C, AK8963_ASAX, 3)
 
         self.magXcoef = (data[0] - 128) / 256.0 + 1.0
         self.magYcoef = (data[1] - 128) / 256.0 + 1.0
         self.magZcoef = (data[2] - 128) / 256.0 + 1.0
 
         # set power down mode
-        bus.write_byte_data(self.address, AK8963_CNTL1, 0x00)
+        bus.write_byte_data(0x0C, AK8963_CNTL1, 0x00)
         time.sleep(0.1)
 
         # set scale&continous mode
-        bus.write_byte_data(self.address, AK8963_CNTL1, (mfs<<4|mode))
+        bus.write_byte_data(0x0C, AK8963_CNTL1, (mfs<<4|mode))
         time.sleep(0.1)
 
     ## Read accelerometer
@@ -205,9 +205,10 @@ class MPU9250:
         z=0
 
         # check data ready
-        drdy = bus.read_byte_data(self.address, AK8963_ST1)
+        drdy = bus.read_byte_data(0x0C, AK8963_ST1)
+        print(drdy & 0x01)
         if drdy & 0x01 :
-            data = bus.read_i2c_block_data(self.address, AK8963_MAGNET_OUT, 7)
+            data = bus.read_i2c_block_data(0x0C, AK8963_MAGNET_OUT, 7)
 
             # check overflow
             if (data[6] & 0x08)!=0x08:
@@ -238,3 +239,4 @@ while True:
     print("Gyro ", test.readGyro())
     print("Magnet ", test.readMagnet())
     print()
+    time.sleep(.5)
