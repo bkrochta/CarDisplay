@@ -81,8 +81,7 @@ class MPU9250:
     #  @param [in] address MPU-9250 I2C slave address default:0x68
     def __init__(self, address=SLAVE_ADDRESS):
         self.address = address
-        self.configMPU9250(GFS_250, AFS_2G)
-        self.configAK8963(AK8963_MODE_C8HZ, AK8963_BIT_16)
+        self.configMPU9250(GFS_250, AFS_2G, AK8963_BIT_16, AK8963_MODE_C8HZ)
 
     ## Configure MPU-9250
     #  @param [in] self The object pointer.
@@ -228,4 +227,3 @@ while True:
     print("Gyro ", test.readGyro())
     print("Magnet ", test.readMagnet())
     print()
-    
