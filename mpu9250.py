@@ -100,13 +100,16 @@ class MPU9250:
             self.b   = np.zeros([3, 1])
             self.A_1 = np.eye(3)
 
-    ## Configure MPU-9250
-    #  @param [in] self The object pointer.
-    #  @param [in] gfs Gyro Full Scale Select(default:GFS_250[+250dps])
-    #  @param [in] afs Accel Full Scale Select(default:AFS_2G[2g])
-    #  @param [in] mfs Magneto Scale Select(default:AK8963_BIT_16[16bit])
-    #  @param [in] mode Magneto Mode Select(default:AK8963_MODE_C8HZ[Continous 8Hz])
     def configMPU9250(self, gfs, afs, mfs, mode):
+        """ Configure MPU9250 and AK8963
+
+        Args:
+            gfd (hex): Gyroscope Full Scale Select(default:GFS_250[+250dps])
+            afs (hex): Accelerometer Full Scale Select(default:AFS_2G[2g])
+            mfs (hex) : Magneto Scale Select(default:AK8963_BIT_16[16bit])
+            mode (hex) : Magenetometer mode select(default:AK8963_MODE_C8HZ[Continous 8Hz])
+
+        """
         if gfs == GFS_250:
             self.gres = 250.0/32768.0
         elif gfs == GFS_500:
@@ -178,12 +181,12 @@ class MPU9250:
         self.bus.write_byte_data(AK8963_SLAVE_ADDRESS, AK8963_CNTL1, (mfs<<4|mode))
         time.sleep(0.1)
 
-    ## Read accelerometer
-    #  @param [in] self The object pointer.
-    #  @retval x : x-axis data
-    #  @retval y : y-axis data
-    #  @retval z : z-axis data
     def readAccel(self):
+        """ Read accelerometer
+
+        Returns:
+            x, y, x (float float float) : g
+        """
         data = self.bus.read_i2c_block_data(self.address, ACCEL_OUT, 6)
         x = self.dataConv(data[1], data[0])
         y = self.dataConv(data[3], data[2])
@@ -193,14 +196,14 @@ class MPU9250:
         y = round(y*self.ares, 3)
         z = round(z*self.ares, 3)
 
-        return {"x":x, "y":y, "z":z}
+        return x, y, z
 
-    ## Read gyro
-    #  @param [in] self The object pointer.
-    #  @retval x : x-gyro data
-    #  @retval y : y-gyro data
-    #  @retval z : z-gyro data
     def readGyro(self):
+        """ Read gyroscope
+
+        Returns:
+            x, y, z : (float float float) : rad/sec
+        """
         data = self.bus.read_i2c_block_data(self.address, GYRO_OUT, 6)
 
         x = self.dataConv(data[1], data[0])
@@ -211,14 +214,15 @@ class MPU9250:
         y = round(y*self.gres, 3)
         z = round(z*self.gres, 3)
 
-        return {"x":x, "y":y, "z":z}
+        return x, y, z
 
-    ## Read magneto
-    #  @param [in] self The object pointer.
-    #  @retval x : X-magneto data
-    #  @retval y : y-magneto data
-    #  @retval z : Z-magneto data
     def readMagnet(self):
+        """ Read magnetometer
+
+        Returns:
+            x, y, z (dictionary) : in uT
+
+        """
         x=0
         y=0
         z=0
@@ -238,35 +242,36 @@ class MPU9250:
                 y = round(y * self.mres * self.magYcoef, 3)
                 z = round(z * self.mres * self.magZcoef, 3)
 
-        return {"x":x, "y":y, "z":z}
+        return x, y, z
 
-    ## Data Convert
-    # @param [in] self The object pointer.
-    # @param [in] data1 LSB
-    # @param [in] data2 MSB
-    # @retval Value MSB+LSB(int 16bit)
     def dataConv(self, data1, data2):
+        """ Convert data to float
+
+        Args:
+            data1 (bits): LSB
+            data2 (bits): MSB
+
+        Returns:
+            int16bit: MSB+LSB
+        """
         value = data1 | (data2 << 8)
         if(value & (1 << 16 - 1)):
             value -= (1<<16)
         return value
 
     def read(self):
-        ''' Get a sample.
+        """ Get a sample.
 
-            Returns
-            -------
-            s : list
-                The sample in uT, [x,y,z] (corrected if performed calibration).
-        '''
+        Returns:
+            s (list) : The sample in uT, [x,y,z] (corrected if performed calibration).
+        """
         a = self.readMagnet()
-        c = [a['x'],a['y'],a['z']]
-        s = np.array(c).reshape(3, 1)
+        s = np.array(a).reshape(3, 1)
         s = np.dot(self.A_1, s - self.b)
         return [s[0,0], s[1,0], s[2,0]]
 
     def calibrate(self):
-        ''' Performs calibration. '''
+        """ Performs calibration. """
 
         print('Collecting samples (Ctrl-C to stop and perform calibration)')
 
@@ -295,24 +300,16 @@ class MPU9250:
 
 
     def __ellipsoid_fit(self, s):
-        ''' Estimate ellipsoid parameters from a set of points.
+        """ Estimate ellipsoid parameters from a set of points.
 
-            Parameters
-            ----------
+        Args:
             s : array_like
               The samples (M,N) where M=3 (x,y,z) and N=number of samples.
 
-            Returns
-            -------
-            M, n, d : array_like, array_like, float
-              The ellipsoid parameters M, n, d.
+        Returns:
+            M, n, d (array_like, array_like, float) : The ellipsoid parameters M, n, d.
 
-            References
-            ----------
-            .. [1] Qingde Li; Griffiths, J.G., "Least squares ellipsoid specific
-               fitting," in Geometric Modeling and Processing, 2004.
-               Proceedings, vol., no., pp.335-340, 2004
-        '''
+        """
 
         # D (samples)
         print(s)
@@ -360,6 +357,14 @@ class MPU9250:
         return M, n, d
 
     def get_heading(self, heading):
+        """ Get magnetic heading
+
+        Args:
+            heading (float) : Magentic direction (-180, 180) in degrees
+
+        Returns:
+            heading (str) : Heading (N, NE, E, SE, S, SW, W, NW)
+        """
         if(heading <= -157.5):
             return "S"
         elif(heading < -112.5):
@@ -378,42 +383,3 @@ class MPU9250:
             return "SW"
         else:
             return "S"
-
-def collect(fn, fs=10):
-    ''' Collect magnetometer samples
-
-        Parameters
-        ----------
-        fn : str
-            Output file.
-        fs : int (optional)
-            Approximate sampling frequency (Hz), default 10 Hz.
-    '''
-
-    print('Collecting [%s]. Ctrl-C to finish' % fn)
-    with open(fn, 'w') as f:
-        f.write('x,y,z\n')
-        try:
-            while True:
-                s = test.read()
-                f.write('%.1f,%.1f,%.1f\n' % (s[0], s[1], s[2]))
-                time.sleep(1./fs)
-        except KeyboardInterrupt: pass
-
-    def get_heading(self, heading):
-
-
-test = MPU9250()
-test.calibrate()
-
-
-while True:
-    print("Accel ", test.readAccel())
-    print("Gyro ", test.readGyro())
-    mag = test.read()
-    print("Magnet ", mag)
-    dir = math.atan2(mag[1],mag[0])*(180/math.pi)
-    print(dir)
-    print(test.get_heading(dir))
-    print()
-    time.sleep(.5)
