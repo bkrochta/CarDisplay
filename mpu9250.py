@@ -92,13 +92,13 @@ class MPU9250:
 
         # initialize values
         self.F   = 1
-        try:
-            with open('data.ser') as f:
-                self.b, self.A_1 = pickle.load(f)
-        except IOError as e:
-            print("No calibration data")
-            self.b   = np.zeros([3, 1])
-            self.A_1 = np.eye(3)
+    #    try:
+   #         with open('data.ser') as f:
+  #              self.b, self.A_1 = pickle.load(f)
+ #       except IOError as e:
+#            print("No calibration data")
+        self.b   = np.zeros([3, 1])
+        self.A_1 = np.eye(3)
 
     def configMPU9250(self, gfs, afs, mfs, mode):
         """ Configure MPU9250 and AK8963
@@ -265,8 +265,8 @@ class MPU9250:
         Returns:
             s (list) : The sample in uT, [x,y,z] (corrected if performed calibration).
         """
-        a = self.readMagnet()
-        s = np.array(a).reshape(3, 1)
+        x,y,z = self.readMagnet()
+        s = np.array([x,y,z]).reshape(3, 1)
         s = np.dot(self.A_1, s - self.b)
         return [s[0,0], s[1,0], s[2,0]]
 
@@ -278,11 +278,12 @@ class MPU9250:
         try:
             s = []
             n = 0
-            while r=self.read():
+            while True:
                 s.append(self.read())
                 n += 1
                 sys.stdout.write('\rTotal: %d' % n)
                 sys.stdout.flush()
+                time.sleep(.25)
         except KeyboardInterrupt:
             pass
 
@@ -295,8 +296,8 @@ class MPU9250:
         M_1 = linalg.inv(M)
         self.b = -np.dot(M_1, n)
         self.A_1 = np.real(self.F / np.sqrt(np.dot(n.T, np.dot(M_1, n)) - d) * linalg.sqrtm(M))
-        with open('data.ser', 'w') as f:
-            pickle.dump([self.b, self.A_1], f)
+       # with open('data.ser', 'w') as f:
+        #    pickle.dump([self.b, self.A_1], f)
 
 
     def __ellipsoid_fit(self, s):
