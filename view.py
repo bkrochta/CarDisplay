@@ -8,7 +8,7 @@ from tkinter import *
 
 g = gps.GPS()
 m = mpu9250.MPU9250()
-m.calibrate()
+#m.calibrate()
 
 root = Tk()
 root.attributes("-fullscreen", True)

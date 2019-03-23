@@ -94,10 +94,8 @@ class MPU9250:
         self.F   = 1
         if not calibrate:
             try:
-                with open('b.ser', 'r') as b:
-                    self.b = np.load(b)
-                with open('a.ser', 'r') as a:
-                    self.A_1 = np.load(a)
+                self.b = np.load('b.npy')
+                self.A_1 = np.load('a.npy')
             except IOError as e:
                 print("No calibration data")
                 self.b   = np.zeros([3, 1])
@@ -302,10 +300,8 @@ class MPU9250:
         M_1 = linalg.inv(M)
         self.b = -np.dot(M_1, n)
         self.A_1 = np.real(self.F / np.sqrt(np.dot(n.T, np.dot(M_1, n)) - d) * linalg.sqrtm(M))
-        with open('b.ser', 'w') as b:
-            np.save(b, self.b)
-        with open('a.ser', 'w') as a:
-            np.save(a, self.A_1)
+        np.save('b', self.b)
+        np.save('a', self.A_1)
 
 
     def __ellipsoid_fit(self, s):
