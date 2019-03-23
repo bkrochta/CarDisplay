@@ -260,7 +260,7 @@ class MPU9250:
                 The sample in uT, [x,y,z] (corrected if performed calibration).
         '''
         a = self.readMagnet()
-        c = a['x'],a['y'],a['z']
+        c = [a['x'],a['y'],a['z']]
         s = np.array(c).reshape(3, 1)
         s = np.dot(self.A_1, s - self.b)
         return [s[0,0], s[1,0], s[2,0]]
@@ -273,7 +273,7 @@ class MPU9250:
         try:
             s = []
             n = 0
-            while True:
+            while r=self.read():
                 s.append(self.read())
                 n += 1
                 sys.stdout.write('\rTotal: %d' % n)
@@ -291,7 +291,7 @@ class MPU9250:
         self.b = -np.dot(M_1, n)
         self.A_1 = np.real(self.F / np.sqrt(np.dot(n.T, np.dot(M_1, n)) - d) * linalg.sqrtm(M))
         with open('data.ser', 'w') as f:
-            pickle.dump([b, A_1], f)
+            pickle.dump([self.b, self.A_1], f)
 
 
     def __ellipsoid_fit(self, s):
@@ -315,11 +315,13 @@ class MPU9250:
         '''
 
         # D (samples)
+        print(s)
         D = np.array([s[0]**2., s[1]**2., s[2]**2.,
                       2.*s[1]*s[2], 2.*s[0]*s[2], 2.*s[0]*s[1],
                       2.*s[0], 2.*s[1], 2.*s[2], np.ones_like(s[0])])
 
         # S, S_11, S_12, S_21, S_22 (eq. 11)
+
         S = np.dot(D, D.T)
         S_11 = S[:6,:6]
         S_12 = S[:6,6:]
@@ -357,6 +359,26 @@ class MPU9250:
 
         return M, n, d
 
+    def get_heading(self, heading):
+        if(heading <= -157.5):
+            return "S"
+        elif(heading < -112.5):
+            return "SE"
+        elif(heading <= -67.5):
+            return "E"
+        elif(heading < -22.5):
+            return "NE"
+        elif(heading <= 22.5):
+            return "N"
+        elif(heading < 67.5):
+            return "NW"
+        elif(heading <= 112.5):
+            return "W"
+        elif(heading < 157.5):
+            return "SW"
+        else:
+            return "S"
+
 def collect(fn, fs=10):
     ''' Collect magnetometer samples
 
@@ -378,6 +400,9 @@ def collect(fn, fs=10):
                 time.sleep(1./fs)
         except KeyboardInterrupt: pass
 
+    def get_heading(self, heading):
+
+
 test = MPU9250()
 test.calibrate()
 
@@ -387,6 +412,8 @@ while True:
     print("Gyro ", test.readGyro())
     mag = test.read()
     print("Magnet ", mag)
-    print(math.atan2(mag[1],mag[0])*(180/math/pi))
+    dir = math.atan2(mag[1],mag[0])*(180/math.pi)
+    print(dir)
+    print(test.get_heading(dir))
     print()
     time.sleep(.5)
