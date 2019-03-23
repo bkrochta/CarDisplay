@@ -85,20 +85,26 @@ AK8963_BIT_16 = 0x01
 class MPU9250:
     ## Constructor
     #  @param [in] address MPU-9250 I2C slave address default:0x68
-    def __init__(self, address=SLAVE_ADDRESS):
+    def __init__(self, calibrate=False, address=SLAVE_ADDRESS,):
         self.bus = smbus.SMBus(1)
         self.address = address
         self.configMPU9250(GFS_250, AFS_2G, AK8963_BIT_16, AK8963_MODE_C8HZ)
 
         # initialize values
         self.F   = 1
-    #    try:
-   #         with open('data.ser') as f:
-  #              self.b, self.A_1 = pickle.load(f)
- #       except IOError as e:
-#            print("No calibration data")
-        self.b   = np.zeros([3, 1])
-        self.A_1 = np.eye(3)
+        if not calibrate:
+            try:
+                with open('b.ser', 'r') as b:
+                    self.b = np.load(b)
+                with open('a.ser', 'r') as a:
+                    self.A_1 = np.load(a)
+            except IOError as e:
+                print("No calibration data")
+                self.b   = np.zeros([3, 1])
+                self.A_1 = np.eye(3)
+        else:
+            self.b   = np.zeros([3, 1])
+            self.A_1 = np.eye(3)
 
     def configMPU9250(self, gfs, afs, mfs, mode):
         """ Configure MPU9250 and AK8963
@@ -296,8 +302,10 @@ class MPU9250:
         M_1 = linalg.inv(M)
         self.b = -np.dot(M_1, n)
         self.A_1 = np.real(self.F / np.sqrt(np.dot(n.T, np.dot(M_1, n)) - d) * linalg.sqrtm(M))
-       # with open('data.ser', 'w') as f:
-        #    pickle.dump([self.b, self.A_1], f)
+        with open('b.ser', 'w') as b:
+            np.save(b, self.b)
+        with open('a.ser', 'w') as a:
+            np.save(a, self.A_1)
 
 
     def __ellipsoid_fit(self, s):
