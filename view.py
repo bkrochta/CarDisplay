@@ -2,7 +2,6 @@ import mpu9250
 import gps
 import thermometer
 import subprocess
-import math
 import time as tim
 from tkinter import *
 
@@ -53,8 +52,7 @@ def tick():
     else:
         time += ' am'
 
-    mag = m.read()
-    h = m.get_heading(math.atan2(mag[1],mag[0])*(180/math.pi))
+    h = m.get_heading()
     in_t = in_therm.get_temp()
 
     direction.config(text=h)

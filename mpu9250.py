@@ -1,6 +1,7 @@
 import smbus
 import time
 import numpy as np
+import math
 import sys
 from scipy import linalg
 import pickle
@@ -88,7 +89,7 @@ class MPU9250:
     def __init__(self, calibrate=False, address=SLAVE_ADDRESS,):
         self.bus = smbus.SMBus(1)
         self.address = address
-        self.configMPU9250(GFS_250, AFS_2G, AK8963_BIT_16, AK8963_MODE_C8HZ)
+        self.config(GFS_250, AFS_2G, AK8963_BIT_16, AK8963_MODE_C8HZ)
 
         # initialize values
         self.F   = 1
@@ -104,7 +105,7 @@ class MPU9250:
             self.b   = np.zeros([3, 1])
             self.A_1 = np.eye(3)
 
-    def configMPU9250(self, gfs, afs, mfs, mode):
+    def config(self, gfs, afs, mfs, mode):
         """ Configure MPU9250 and AK8963
 
         Args:
@@ -185,16 +186,16 @@ class MPU9250:
         self.bus.write_byte_data(AK8963_SLAVE_ADDRESS, AK8963_CNTL1, (mfs<<4|mode))
         time.sleep(0.1)
 
-    def readAccel(self):
+    def read_accel_raw(self):
         """ Read accelerometer
 
         Returns:
             x, y, x (float float float) : g
         """
         data = self.bus.read_i2c_block_data(self.address, ACCEL_OUT, 6)
-        x = self.dataConv(data[1], data[0])
-        y = self.dataConv(data[3], data[2])
-        z = self.dataConv(data[5], data[4])
+        x = self.conv_data(data[1], data[0])
+        y = self.conv_data(data[3], data[2])
+        z = self.conv_data(data[5], data[4])
 
         x = round(x*self.ares, 3)
         y = round(y*self.ares, 3)
@@ -202,7 +203,7 @@ class MPU9250:
 
         return x, y, z
 
-    def readGyro(self):
+    def read_gyro_raw(self):
         """ Read gyroscope
 
         Returns:
@@ -210,9 +211,9 @@ class MPU9250:
         """
         data = self.bus.read_i2c_block_data(self.address, GYRO_OUT, 6)
 
-        x = self.dataConv(data[1], data[0])
-        y = self.dataConv(data[3], data[2])
-        z = self.dataConv(data[5], data[4])
+        x = self.conv_data(data[1], data[0])
+        y = self.conv_data(data[3], data[2])
+        z = self.conv_data(data[5], data[4])
 
         x = round(x*self.gres, 3)
         y = round(y*self.gres, 3)
@@ -220,7 +221,7 @@ class MPU9250:
 
         return x, y, z
 
-    def readMagnet(self):
+    def read_magnet_raw(self):
         """ Read magnetometer
 
         Returns:
@@ -238,9 +239,9 @@ class MPU9250:
 
             # check overflow
             if (data[6] & 0x08)!=0x08:
-                x = self.dataConv(data[0], data[1])
-                y = self.dataConv(data[2], data[3])
-                z = self.dataConv(data[4], data[5])
+                x = self.conv_data(data[0], data[1])
+                y = self.conv_data(data[2], data[3])
+                z = self.conv_data(data[4], data[5])
 
                 x = round(x * self.mres * self.magXcoef, 3)
                 y = round(y * self.mres * self.magYcoef, 3)
@@ -248,8 +249,8 @@ class MPU9250:
 
         return x, y, z
 
-    def dataConv(self, data1, data2):
-        """ Convert data to float
+    def conv_data(self, data1, data2):
+        """ Convert raw data to float
 
         Args:
             data1 (bits): LSB
@@ -263,13 +264,13 @@ class MPU9250:
             value -= (1<<16)
         return value
 
-    def read(self):
-        """ Get a sample.
+    def read_magnet(self):
+        """ Get a sample from magntometer with correction if calibrated.
 
         Returns:
             s (list) : The sample in uT, [x,y,z] (corrected if performed calibration).
         """
-        x,y,z = self.readMagnet()
+        x,y,z = self.read_magnet_raw()
         s = np.array([x,y,z]).reshape(3, 1)
         s = np.dot(self.A_1, s - self.b)
         return [s[0,0], s[1,0], s[2,0]]
@@ -283,7 +284,7 @@ class MPU9250:
             s = []
             n = 0
             while True:
-                s.append(self.read())
+                s.append(self.read_magnet())
                 n += 1
                 sys.stdout.write('\rTotal: %d' % n)
                 sys.stdout.flush()
@@ -361,15 +362,15 @@ class MPU9250:
 
         return M, n, d
 
-    def get_heading(self, heading):
+    def get_heading(self):
         """ Get magnetic heading
-
-        Args:
-            heading (float) : Magentic direction (-180, 180) in degrees
 
         Returns:
             heading (str) : Heading (N, NE, E, SE, S, SW, W, NW)
         """
+        mag = self.read_magnet()
+        heading = math.atan2(mag[1],mag[0])*(180/math.pi)
+
         if(heading <= -157.5):
             return "S"
         elif(heading < -112.5):
