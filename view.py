@@ -6,8 +6,13 @@ import math
 import time as tim
 from tkinter import *
 
+inside_therm_addr = '28-031597799b7d'
+outside_therm_addr = '28-0315977942f6'
+
 g = gps.GPS()
 m = mpu9250.MPU9250()
+#out_therm = thermometer.Thermometer(outside_therm_addr)
+in_therm = thermometer.Thermometer(inside_therm_addr)
 #m.calibrate()
 
 root = Tk()
@@ -50,10 +55,11 @@ def tick():
 
     mag = m.read()
     h = m.get_heading(math.atan2(mag[1],mag[0])*(180/math.pi))
+    in_t = in_therm.get_temp()
 
     direction.config(text=h)
     clock.config(text=time)
-    temp_in.config(text='NA')
+    temp_in.config(text=in_t)
     temp_out.config(text='NA')
     tim.sleep(.25)
     # calls itself every 200 milliseconds
