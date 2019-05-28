@@ -1,69 +1,104 @@
 import mpu9250
 import gps
 import thermometer
-import subprocess
-import time as tim
-from tkinter import *
+import time
+import tkinter
+import threading
 
-inside_therm_addr = '28-031597799b7d'
-outside_therm_addr = '28-0315977942f6'
+# Thermometer addresses
+IN_THERM_ADDR = '28-031597799b7d'
+OUT_THERM_ADDR = '28-0315977942f6'
 
-g = gps.GPS()
-m = mpu9250.MPU9250()
-#out_therm = thermometer.Thermometer(outside_therm_addr)
-in_therm = thermometer.Thermometer(inside_therm_addr)
-#m.calibrate()
+# Globals
+ct = 0
+in_temp = 0
+out_temp = 0
+direction = 0
+speed = 0
+quit = 0
+scale = 4.5
 
-root = Tk()
+def __in_temp_thread():
+    global in_temp
+
+    in_therm = thermometer.Thermometer(IN_THERM_ADDR)
+    while quit == 0:
+        in_temp = in_therm.get_temp()
+
+
+def __out_temp_thread():
+    global out_temp
+
+    out_therm = thermometer.Thermometer(OUT_THERM_ADDR)
+    while quit == 0:
+        out_temp = out_therm.get_temp()
+
+
+def __gps_thread():
+    global speed
+
+    g = gps.GPS()
+    while quit == 0:
+        g.update()
+        speed = g.get_speed()
+
+
+def __mpu_thread():
+    global direction
+
+    mpu = mpu9250.MPU9250()
+    #mpu.calibrate()
+    while quit == 0:
+        direction = mpu.get_heading()
+
+def __quit():
+    quit = 1
+    root.detroy()
+
+
+root = tkinter.Tk()
 root.attributes("-fullscreen", True)
 root.configure(background='black')
 
-Button(root, text="Quit", command=root.destroy).pack()
+clock_label = tkinter.Label(root, font=('arial',100/scale, 'bold'), fg='red', bg='black')
+dir_label = tkinter.Label(root, font=('arial',100/scale, 'bold'), fg='red', bg='black')
+temp_in_label = tkinter.Label(root, font=('arial',100/scale, 'bold'), fg='red', bg='black')
+temp_out_label = tkinter.Label(root, font=('arial',100/scale, 'bold'), fg='red', bg='black')
+speed_label = tkinter.Label(root, font=('arial',400/scale, 'bold'), fg='red', bg='black')
 
-clock = Label(root, font=('arial',500, 'bold'), fg='red', bg='black')
-clock.pack()
+clock_label.place(relx=0.2, rely=0, relheight=0.2, relwidth=0.6)
+dir_label.place(relx=0, rely=0, relheight=0.2, relwidth=0.2)
+temp_in_label.place(relx=0, rely=0.8, relheight=0.2, relwidth=0.2)
+temp_out_label.place(relx=0.8, rely=0, relheight=0.2, relwidth=0.2)
+speed_label.place(relx=0.3, rely=0.3, relheight=0.6, relwidth=0.6)
 
-direction = Label(root, font=('arial',100, 'bold'), fg='red', bg='black')
-direction.pack()
+tkinter.Button(root, text="Quit", command=__quit).place(relx=0.8, rely=0.5, relheight=0.2, relwidth=0.2)
 
-temp_in = Label(root, font=('arial',25, 'bold'), fg='red', bg='black')
-temp_in.pack()
+in_therm_thread = threading.Thread(task=__in_temp_thread)
+out_therm_thread = threading.Thread(task=__out_temp_thread)
+mpu_thread = threading.Thread(task=__mpu_thread)
+gps_thread = threading.Thread(task=__gps_thread)
 
-temp_out = Label(root, font=('arial',25, 'bold'), fg='red', bg='black')
-temp_out.pack()
+in_therm_thread.start()
+# out_therm_thread.start()
+mpu_thread.start()
+gps_thread.start()
+
+
+
 
 def tick():
-    process = subprocess.run('date', stdout=subprocess.PIPE)
-    time = str(process.stdout).split(':')
-    hours = int(time[0][-2:])
-    mins = time[1]
-    secs = time[2][:-2]
-    if hours >= 12:
-        hours -=12
-        pm = True
-    else:
-        pm = False
-    if hours == 0:
-        hours = 12
+    global ct
 
-    time = str(hours) + ':' + mins
-    if pm:
-        time += ' pm'
-    else:
-        time += ' am'
-
-    h = m.get_heading()
-    in_t = in_therm.get_temp()
-
-    direction.config(text=h)
-    clock.config(text=time)
-    temp_in.config(text=in_t)
-    temp_out.config(text='NA')
-    tim.sleep(.25)
+    dir_label.config(text=direction)
+    clock_label.config(text=clock)
+    temp_in_label.config(text=in__therm)
+    temp_out_label.config(text=ct)
+    ct += 1
     # calls itself every 200 milliseconds
     # to update the time display as needed
     # could use &gt;200 ms, but display gets jerky
-    clock.after(20, tick)
+    clock.after(200, tick)
 
 tick()
 root.mainloop()
