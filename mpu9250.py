@@ -4,9 +4,8 @@ import numpy as np
 import math
 import sys
 from scipy import linalg
-import pickle
 
-
+### https://www.invensense.com/wp-content/uploads/2015/02/RM-MPU-9250A-00-v1.6.pdf
 ## MPU9250 Default I2C slave address
 SLAVE_ADDRESS        = 0x68
 ## AK8963 I2C slave address
@@ -60,7 +59,7 @@ AFS_8G   = 0x02
 AFS_16G  = 0x03
 
 # AK8963 Register Addresses
-AK8963_ST1        = 0x02
+AK8963_ST1        = 0x02 # data ready register
 AK8963_MAGNET_OUT = 0x03
 AK8963_CNTL1      = 0x0A
 AK8963_CNTL2      = 0x0B
@@ -92,6 +91,17 @@ class MPU9250:
         self.config(GFS_250, AFS_2G, AK8963_BIT_16, AK8963_MODE_C8HZ)
 
         # initialize values
+        self.max_x = -100000
+        self.max_y = -100000
+        self.max_z = -100000
+        self.min_x = 100000
+        self.min_y = 100000
+        self.min_z = 100000
+
+        self.x_hist = []
+        self.y_hist = []
+        self.z_hist = []
+
         self.F   = 1
         if not calibrate:
             try:
@@ -225,32 +235,35 @@ class MPU9250:
         """ Read magnetometer
 
         Returns:
-            x, y, z (dictionary) : in uT
+            x, y, z (float float float) : in uT
 
         """
         x=0
         y=0
         z=0
 
-        # check data ready
-        drdy = self.bus.read_byte_data(AK8963_SLAVE_ADDRESS, AK8963_ST1)
-        if drdy & 0x01 :
-            data = self.bus.read_i2c_block_data(AK8963_SLAVE_ADDRESS, AK8963_MAGNET_OUT, 7)
+        # wait until data ready and no overflow
+        while self.bus.read_byte_data(AK8963_SLAVE_ADDRESS, AK8963_ST1) == 0x00:
+            continue
 
-            # check overflow
-            if (data[6] & 0x08)!=0x08:
-                x = self.conv_data(data[0], data[1])
-                y = self.conv_data(data[2], data[3])
-                z = self.conv_data(data[4], data[5])
 
-                x = round(x * self.mres * self.magXcoef, 3)
-                y = round(y * self.mres * self.magYcoef, 3)
-                z = round(z * self.mres * self.magZcoef, 3)
+        # read raw data (little endian)
+        data = self.bus.read_i2c_block_data(AK8963_SLAVE_ADDRESS, AK8963_MAGNET_OUT, 7)
 
-        return x, y, z
+        # check overflow
+        if (data[6] & 0x08)!=0x08:
+            x = self.conv_data(data[0], data[1])
+            y = self.conv_data(data[2], data[3])
+            z = self.conv_data(data[4], data[5])
+
+            x = round(x * self.mres * self.magXcoef, 3)
+            y = round(y * self.mres * self.magYcoef, 3)
+            z = round(z * self.mres * self.magZcoef, 3)
+
+        return -y, -x, z
 
     def conv_data(self, data1, data2):
-        """ Convert raw data to float
+        """ Convert raw binary data to float
 
         Args:
             data1 (bits): LSB
@@ -264,6 +277,17 @@ class MPU9250:
             value -= (1<<16)
         return value
 
+    # def read_magnet(self):
+    #     """ Get a sample from magntometer with correction if calibrated.
+    #
+    #     Returns:
+    #         s (list) : The sample in uT, [x,y,z] (corrected if performed calibration).
+    #     """
+    #     x,y,z = self.read_magnet_raw()
+    #     s = np.array([x,y,z]).reshape(3, 1)
+    #     s = np.dot(self.A_1, s - self.b)
+    #     return [s[0,0], s[1,0], s[2,0]]
+
     def read_magnet(self):
         """ Get a sample from magntometer with correction if calibrated.
 
@@ -271,96 +295,136 @@ class MPU9250:
             s (list) : The sample in uT, [x,y,z] (corrected if performed calibration).
         """
         x,y,z = self.read_magnet_raw()
-        s = np.array([x,y,z]).reshape(3, 1)
-        s = np.dot(self.A_1, s - self.b)
-        return [s[0,0], s[1,0], s[2,0]]
+        x -= (self.max_x+self.min_x)/2
+        y -= (self.max_y+self.min_y)/2
+        z -= (self.max_z+self.min_z)/2
+
+        x = float((x - self.min_x) / (self.max_x - self.min_x) * 2 - 1)
+        y = float((y - self.min_y) / (self.max_y - self.min_y) * 2 - 1)
+        z = float((z - self.min_z) / (self.max_z - self.min_z) * 2 - 1)
+
+        return [x, y, z]
 
     def calibrate(self):
-        """ Performs calibration. """
-
         print('Collecting samples (Ctrl-C to stop and perform calibration)')
-
         try:
             s = []
             n = 0
             while True:
-                s.append(self.read_magnet())
+                s.append(self.read_magnet_raw())
                 n += 1
                 sys.stdout.write('\rTotal: %d' % n)
                 sys.stdout.flush()
-                time.sleep(.25)
         except KeyboardInterrupt:
             pass
 
-        # ellipsoid fit
-        s = np.array(s).T
-        M, n, d = self.__ellipsoid_fit(s)
-
-        # calibration parameters
-        # note: some implementations of sqrtm return complex type, taking real
-        M_1 = linalg.inv(M)
-        self.b = -np.dot(M_1, n)
-        self.A_1 = np.real(self.F / np.sqrt(np.dot(n.T, np.dot(M_1, n)) - d) * linalg.sqrtm(M))
-        np.save('b', self.b)
-        np.save('a', self.A_1)
 
 
-    def __ellipsoid_fit(self, s):
-        """ Estimate ellipsoid parameters from a set of points.
+        for trio in s:
+            if trio[0] > self.max_x:
+                self.max_x = trio[0]
+            if trio[0] < self.min_x:
+                self.min_x = trio[0]
+            if trio[1] > self.max_y:
+                self.max_y = trio[1]
+            if trio[1] < self.min_y:
+                self.min_y = trio[1]
+            if trio[2] > self.max_z:
+                self.max_z = trio[2]
+            if trio[2] < self.min_z:
+                self.min_z = trio[2]
 
-        Args:
-            s : array_like
-              The samples (M,N) where M=3 (x,y,z) and N=number of samples.
+        print(self.min_x,self.max_x,self.min_y,self.max_y,self.min_z,self.max_z)
 
-        Returns:
-            M, n, d (array_like, array_like, float) : The ellipsoid parameters M, n, d.
 
-        """
 
-        # D (samples)
-        print(s)
-        D = np.array([s[0]**2., s[1]**2., s[2]**2.,
-                      2.*s[1]*s[2], 2.*s[0]*s[2], 2.*s[0]*s[1],
-                      2.*s[0], 2.*s[1], 2.*s[2], np.ones_like(s[0])])
 
-        # S, S_11, S_12, S_21, S_22 (eq. 11)
-
-        S = np.dot(D, D.T)
-        S_11 = S[:6,:6]
-        S_12 = S[:6,6:]
-        S_21 = S[6:,:6]
-        S_22 = S[6:,6:]
-
-        # C (Eq. 8, k=4)
-        C = np.array([[-1,  1,  1,  0,  0,  0],
-                      [ 1, -1,  1,  0,  0,  0],
-                      [ 1,  1, -1,  0,  0,  0],
-                      [ 0,  0,  0, -4,  0,  0],
-                      [ 0,  0,  0,  0, -4,  0],
-                      [ 0,  0,  0,  0,  0, -4]])
-
-        # v_1 (eq. 15, solution)
-        E = np.dot(linalg.inv(C),
-                   S_11 - np.dot(S_12, np.dot(linalg.inv(S_22), S_21)))
-
-        E_w, E_v = np.linalg.eig(E)
-
-        v_1 = E_v[:, np.argmax(E_w)]
-        if v_1[0] < 0: v_1 = -v_1
-
-        # v_2 (eq. 13, solution)
-        v_2 = np.dot(np.dot(-np.linalg.inv(S_22), S_21), v_1)
-
-        # quadric-form parameters
-        M = np.array([[v_1[0], v_1[3], v_1[4]],
-                      [v_1[3], v_1[1], v_1[5]],
-                      [v_1[4], v_1[5], v_1[2]]])
-        n = np.array([[v_2[0]],
-                      [v_2[1]],
-                      [v_2[2]]])
-        d = v_2[3]
-
-        return M, n, d
+    # def calibrate(self):
+    #     """ Performs calibration. """
+    #
+    #     print('Collecting samples (Ctrl-C to stop and perform calibration)')
+    #
+    #     try:
+    #         s = []
+    #         n = 0
+    #         while True:
+    #             s.append(self.read_magnet())
+    #             n += 1
+    #             sys.stdout.write('\rTotal: %d' % n)
+    #             sys.stdout.flush()
+    #             time.sleep(.25)
+    #     except KeyboardInterrupt:
+    #         pass
+    #
+    #     # ellipsoid fit
+    #     s = np.array(s).T
+    #     M, n, d = self.__ellipsoid_fit(s)
+    #
+    #     # calibration parameters
+    #     # note: some implementations of sqrtm return complex type, taking real
+    #     M_1 = linalg.inv(M)
+    #     self.b = -np.dot(M_1, n)
+    #     self.A_1 = np.real(self.F / np.sqrt(np.dot(n.T, np.dot(M_1, n)) - d) * linalg.sqrtm(M))
+    #     np.save('b', self.b)
+    #     np.save('a', self.A_1)
+    #
+    #
+    # def __ellipsoid_fit(self, s):
+    #     """ Estimate ellipsoid parameters from a set of points.
+    #
+    #     Args:
+    #         s : array_like
+    #           The samples (M,N) where M=3 (x,y,z) and N=number of samples.
+    #
+    #     Returns:
+    #         M, n, d (array_like, array_like, float) : The ellipsoid parameters M, n, d.
+    #
+    #     """
+    #
+    #     # D (samples)
+    #     print(s)
+    #     D = np.array([s[0]**2., s[1]**2., s[2]**2.,
+    #                   2.*s[1]*s[2], 2.*s[0]*s[2], 2.*s[0]*s[1],
+    #                   2.*s[0], 2.*s[1], 2.*s[2], np.ones_like(s[0])])
+    #
+    #     # S, S_11, S_12, S_21, S_22 (eq. 11)
+    #
+    #     S = np.dot(D, D.T)
+    #     S_11 = S[:6,:6]
+    #     S_12 = S[:6,6:]
+    #     S_21 = S[6:,:6]
+    #     S_22 = S[6:,6:]
+    #
+    #     # C (Eq. 8, k=4)
+    #     C = np.array([[-1,  1,  1,  0,  0,  0],
+    #                   [ 1, -1,  1,  0,  0,  0],
+    #                   [ 1,  1, -1,  0,  0,  0],
+    #                   [ 0,  0,  0, -4,  0,  0],
+    #                   [ 0,  0,  0,  0, -4,  0],
+    #                   [ 0,  0,  0,  0,  0, -4]])
+    #
+    #     # v_1 (eq. 15, solution)
+    #     E = np.dot(linalg.inv(C),
+    #                S_11 - np.dot(S_12, np.dot(linalg.inv(S_22), S_21)))
+    #
+    #     E_w, E_v = np.linalg.eig(E)
+    #
+    #     v_1 = E_v[:, np.argmax(E_w)]
+    #     if v_1[0] < 0: v_1 = -v_1
+    #
+    #     # v_2 (eq. 13, solution)
+    #     v_2 = np.dot(np.dot(-np.linalg.inv(S_22), S_21), v_1)
+    #
+    #     # quadric-form parameters
+    #     M = np.array([[v_1[0], v_1[3], v_1[4]],
+    #                   [v_1[3], v_1[1], v_1[5]],
+    #                   [v_1[4], v_1[5], v_1[2]]])
+    #     n = np.array([[v_2[0]],
+    #                   [v_2[1]],
+    #                   [v_2[2]]])
+    #     d = v_2[3]
+    #
+    #     return M, n, d
 
     def get_heading(self):
         """ Get magnetic heading
@@ -369,23 +433,57 @@ class MPU9250:
             heading (str) : Heading (N, NE, E, SE, S, SW, W, NW)
         """
         mag = self.read_magnet()
-        heading = math.atan2(mag[1],mag[0])*(180/math.pi)
+        x,y,z = self.read_accel_raw()
+        acc = [x,y,z]
+        heading = math.atan2(mag[2],mag[1])*(180/math.pi)
+        if heading < 0:
+            heading += 360
 
-        if(heading <= -157.5):
-            return "S"
-        elif(heading < -112.5):
-            return "SE"
-        elif(heading <= -67.5):
-            return "E"
-        elif(heading < -22.5):
-            return "NE"
-        elif(heading <= 22.5):
+        print('not compensated %f ' % heading)
+
+        #Normalize accelerometer raw values.
+        accYnorm = acc[1]/math.sqrt(acc[1] * acc[1] + acc[2] * acc[2] + acc[0] * acc[0])
+        accZnorm = acc[2]/math.sqrt(acc[1] * acc[1] + acc[2] * acc[2] + acc[0] * acc[0])
+
+        #Calculate pitch and roll
+        pitch = math.asin(accYnorm)
+        roll = -math.asin(accZnorm/math.cos(pitch))
+
+        #Calculate the new tilt compensated values
+        magYcomp = mag[1]*math.cos(pitch)+mag[0]*math.sin(pitch)
+        magZcomp = mag[1]*math.sin(roll)*math.sin(pitch)+mag[2]*math.cos(roll)+mag[0]*math.sin(roll)*math.cos(pitch)
+
+        #Calculate heading
+        heading = 180*math.atan2(magZcomp,magYcomp)/math.pi
+
+        #Convert heading to 0 - 360
+        if heading < 0:
+            heading += 360;
+
+
+
+        if(heading <= 22.5):
             return "N"
         elif(heading < 67.5):
-            return "NW"
+            return "NE"
         elif(heading <= 112.5):
-            return "W"
+            return "E"
         elif(heading < 157.5):
-            return "SW"
-        else:
+            return "SE"
+        elif(heading <= 202.5):
             return "S"
+        elif(heading < 247.5):
+            return "SW"
+        elif(heading <= 292.5):
+            return "W"
+        elif(heading < 337.5):
+            return "NW"
+        else:
+            return "N"
+
+m = MPU9250()
+m.calibrate()
+while True:
+    print(m.get_heading())
+
+    time.sleep(1)
