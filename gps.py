@@ -5,7 +5,9 @@ from datetime import datetime, timedelta
 from pytz import timezone
 import pytz
 
+
 class GPS:
+
 
     def __init__(self, metric=False):
         self.metric = metric
@@ -16,8 +18,10 @@ class GPS:
         self.start_time = time.monotonic()
         self.gps_socket = agps3.GPSDSocket()
         self.data_stream = agps3.DataStream()
+
         self.gps_socket.connect()
         self.gps_socket.watch()
+
 
     def update(self):
         """ Update data_stream and speed """
@@ -29,6 +33,7 @@ class GPS:
                     if (self.speed != "n/a"):
                         return
 
+
     def get_speed(self):
         """ Get speed
 
@@ -39,6 +44,7 @@ class GPS:
             return self.speed
         else:
             return self.speed * 2.23694
+
 
     def get_average_speed(self, metric=None):
         """ Get average_speed
@@ -58,11 +64,12 @@ class GPS:
         else:
             return self.average_speed * 2.23694
 
+
     def get_distance_traveled(self):
         """ Get distance traveled
 
         Returns:
-            distance (float) : in m or miles, depending on self.metric
+            distance (float) : in meters or miles, depending on self.metric
         """
         self.distance_traveled = self.average_speed * (time.monotonic() - self.start_time)
         if self.metric:
@@ -70,13 +77,15 @@ class GPS:
         else:
             return self.distance_traveled * .0006213712
 
+
     def get_time(self):
         """ Gets time
 
         Returns:
-            time (str) : time and date
+            time (str) : time and date from gps
         """
         return self.data_stream.time
+
 
     def update_time(self):
         """ Sets system clock with time from gps """
@@ -95,16 +104,3 @@ class GPS:
         split = str(dateeast).split(" ")
         os.system("sudo date +%D -s " + split[0])
         os.system("sudo date +%T -s " + split[1][:-6])
-
-
-    def i_dst(self, day, month, dow):
-        if month < 3 or month > 11:
-            return False
-        elif month > 3 and month < 11:
-            return True
-        else:
-            prev_sun = day - dow - 1
-            if month == 3:
-                return prev_sun >= 8
-            else:
-                return prev_sun <= 0
