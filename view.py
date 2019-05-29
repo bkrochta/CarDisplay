@@ -20,6 +20,7 @@ avg_speed = 20
 dst_traveled = 500
 quit = 0
 scale = 4.5
+time_set = 0
 
 def __in_temp_thread():
     global in_temp
@@ -45,10 +46,12 @@ def __gps_thread():
     global speed
     global avg_speed
     global dst_traveled
+    global time_set
 
     g = gps.GPS()
     g.update()
     g.update_time()
+    time_set = 1
     while quit == 0:
         g.update()
         speed = math.floor(g.get_speed())
@@ -130,7 +133,8 @@ gps_thread.start()
 # MAIN LOOP #
 while True:
     dir_label.config(text=direction)
-    clock_label.config(text=datetime.datetime.now().strftime('%-I:%M'))
+    if time_set == 1:
+        clock_label.config(text=datetime.datetime.now().strftime('%-I:%M'))
     temp_in_label.config(text=str(in_temp) + '\u00b0F')
     temp_out_label.config(text=str(out_temp) + '\u00b0F')
     speed_label.config(text=speed)
