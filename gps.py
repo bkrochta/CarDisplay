@@ -77,6 +77,32 @@ class GPS:
         else:
             return self.distance_traveled * .0006213712
 
+    def get_heading(self):
+        heading = self.data_stream.track
+
+        if heading < 0:
+            heading += 360;
+
+        if heading == 0.0 or heading == 'n/a':
+            return None
+        if(heading <= 22.5):
+            return "N"
+        elif(heading < 67.5):
+            return "NE"
+        elif(heading <= 112.5):
+            return "E"
+        elif(heading < 157.5):
+            return "SE"
+        elif(heading <= 202.5):
+            return "S"
+        elif(heading < 247.5):
+            return "SW"
+        elif(heading <= 292.5):
+            return "W"
+        elif(heading < 337.5):
+            return "NW"
+        else:
+            return "N"
 
     def get_time(self):
         """ Gets time

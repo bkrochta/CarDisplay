@@ -55,6 +55,9 @@ def __gps_thread():
     while quit == 0:
         g.update()
         speed = math.floor(g.get_speed())
+        direction = g.get_heading()
+        if direction == None:
+            direction = '--'
         # avg_speed = int(g.get_average_speed())
         # dst_traveled = int(g.get_distance_traveled())
         time.sleep(0.200)
@@ -121,13 +124,13 @@ in_label.place(relx=0.0, rely=0.775, relheight=0.05, relwidth=0.075)
 # create threads for sensors
 in_therm_thread = threading.Thread(target=__in_temp_thread)
 out_therm_thread = threading.Thread(target=__out_temp_thread)
-mpu_thread = threading.Thread(target=__mpu_thread)
+#mpu_thread = threading.Thread(target=__mpu_thread)
 gps_thread = threading.Thread(target=__gps_thread)
 
 # start threads
 in_therm_thread.start()
 out_therm_thread.start()
-mpu_thread.start()
+#mpu_thread.start()
 gps_thread.start()
 
 # MAIN LOOP #
