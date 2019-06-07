@@ -20,7 +20,6 @@ avg_speed = 20
 dst_traveled = 500
 quit = 0
 scale = 4.5
-time_set = 0
 
 def __in_temp_thread():
     global in_temp
@@ -40,18 +39,17 @@ def __out_temp_thread():
         out_temp = out_therm.get_temp()
         if out_temp == None:
             out_temp = 'er'
+        while speed < 5:
+            time.sleep(10)
 
 
 def __gps_thread():
     global speed
     global avg_speed
     global dst_traveled
-    global time_set
 
     g = gps.GPS()
-    g.update()
     g.update_time()
-    time_set = 1
     while quit == 0:
         g.update()
         speed = math.floor(g.get_speed())
@@ -60,7 +58,7 @@ def __gps_thread():
             direction = '--'
         # avg_speed = int(g.get_average_speed())
         # dst_traveled = int(g.get_distance_traveled())
-        time.sleep(0.200)
+        time.sleep(0.100)
 
 
 def __mpu_thread():
@@ -70,7 +68,7 @@ def __mpu_thread():
     #mpu.calibrate()
     while quit == 0:
         direction = mpu.get_heading()
-        time.sleep(0.200)
+        time.sleep(0.100)
 
 def __quit(e):
     global quit
@@ -102,10 +100,10 @@ in_label = tkinter.Label(root, font=('arial',int(100/scale), 'bold'), fg='red', 
 # dt_label = tkinter.Label(root, font=('arial',int(100/scale), 'bold'), fg='red', bg='black', text='dst traveled:')
 
 # Place data labels
-clock_label.place(relx=0.2, rely=0, relheight=0.2, relwidth=0.6)
-dir_label.place(relx=0, rely=0, relheight=0.2, relwidth=0.2)
-temp_in_label.place(relx=0, rely=0.8, relheight=0.2, relwidth=0.2)
-temp_out_label.place(relx=0.8, rely=0, relheight=0.2, relwidth=0.2)
+clock_label.place(relx=0.225, rely=0, relheight=0.2, relwidth=0.55)
+dir_label.place(relx=0, rely=0, relheight=0.2, relwidth=0.225)
+temp_in_label.place(relx=0, rely=0.8, relheight=0.2, relwidth=0.225)
+temp_out_label.place(relx=0.775, rely=0, relheight=0.2, relwidth=0.225)
 speed_label.place(relx=0.2, rely=0.2, relheight=0.6, relwidth=0.6)
 # avg_speed_label.place(relx=0.2, rely=0.8, relheight=0.2, relwidth=0.2)
 # dst_traveled_label.place(relx=0.4, rely=0.8, relheight=0.2, relwidth=0.2)
@@ -136,7 +134,7 @@ gps_thread.start()
 # MAIN LOOP #
 while True:
     dir_label.config(text=direction)
-    if time_set == 1:
+    if speed != '--':
         clock_label.config(text=datetime.datetime.now().strftime('%-I:%M'))
     temp_in_label.config(text=str(in_temp) + '\u00b0F')
     temp_out_label.config(text=str(out_temp) + '\u00b0F')
