@@ -104,18 +104,12 @@ class GPS:
         else:
             return "N"
 
-    def get_time(self):
-        """ Gets time
-
-        Returns:
-            time (str) : time and date from gps
-        """
-        return self.data_stream.time
-
 
     def update_time(self):
         """ Sets system clock with time from gps """
-        t = self.get_time()
+        self.update()
+        
+        t = self.data_stream.time
         split = t.split("-")
         year = split[0]
         month = split[1]
