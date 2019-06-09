@@ -32,6 +32,7 @@ class GPS:
                     self.speed = self.data_stream.speed
                     if (self.speed != "n/a"):
                         return
+            time.sleep(5)
 
 
     def get_speed(self):
@@ -108,7 +109,7 @@ class GPS:
     def update_time(self):
         """ Sets system clock with time from gps """
         self.update()
-        
+
         t = self.data_stream.time
         split = t.split("-")
         year = split[0]

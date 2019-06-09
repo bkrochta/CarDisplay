@@ -1,4 +1,3 @@
-import mpu9250
 import gps
 import thermometer
 import time
@@ -29,6 +28,7 @@ def __in_temp_thread():
         in_temp = in_therm.get_temp()
         if in_temp == None:
             in_temp = 'er'
+        time.sleep(5)
 
 
 def __out_temp_thread():
@@ -40,7 +40,8 @@ def __out_temp_thread():
         if out_temp == None:
             out_temp = 'er'
         while speed < 5:
-            time.sleep(10)
+            time.sleep(20)
+        time.sleep(5)
 
 
 def __gps_thread():
@@ -53,9 +54,9 @@ def __gps_thread():
     while quit == 0:
         g.update()
         speed = math.floor(g.get_speed())
-        direction = g.get_heading()
-        if direction == None:
-            direction = '--'
+        # direction = g.get_heading()
+        # if direction == None:
+        #     direction = '--'
         # avg_speed = int(g.get_average_speed())
         # dst_traveled = int(g.get_distance_traveled())
         time.sleep(0.100)
