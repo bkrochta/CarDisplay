@@ -1,4 +1,4 @@
-from gps3 import agps3
+from gps3.agps3threaded import AGPS3mechanism
 import time
 import os
 from datetime import datetime, timedelta
@@ -16,23 +16,10 @@ class GPS:
         self.average_count = 0
         self.distance_traveled = 0;
         self.start_time = time.monotonic()
-        self.gps_socket = agps3.GPSDSocket()
-        self.data_stream = agps3.DataStream()
 
-        self.gps_socket.connect()
-        self.gps_socket.watch()
-
-
-    def update(self):
-        """ Update data_stream and speed """
-        while True:
-            for new_data in self.gps_socket:
-                if new_data:
-                    self.data_stream.unpack(new_data)
-                    self.speed = self.data_stream.speed
-                    if (self.speed != "n/a"):
-                        return
-            time.sleep(5)
+        self.gps_thread = AGPS3mechanism()
+        self.gps_thread.stream_data()
+        self.gps_thread.run_thread()
 
 
     def get_speed(self):
@@ -41,6 +28,9 @@ class GPS:
         Returns:
             speed (float) : in m/s or mph, depending on self.metric
         """
+        self.speed = self.gps_thread.data_stream.speed
+        if self.speed == 'n/a':
+            return None
         if self.metric:
             return self.speed
         else:
@@ -78,8 +68,9 @@ class GPS:
         else:
             return self.distance_traveled * .0006213712
 
+
     def get_heading(self):
-        heading = self.data_stream.track
+        heading = self.gps_thread.data_stream.track
 
         if heading < 0:
             heading += 360;
@@ -108,9 +99,10 @@ class GPS:
 
     def update_time(self):
         """ Sets system clock with time from gps """
-        self.update()
-
-        t = self.data_stream.time
+        while True:
+            t = self.gps_thread.data_stream.time
+            if t != 'n/a':
+                break;
         split = t.split("-")
         year = split[0]
         month = split[1]
@@ -125,3 +117,4 @@ class GPS:
         split = str(dateeast).split(" ")
         os.system("sudo date +%D -s " + split[0])
         os.system("sudo date +%T -s " + split[1][:-6])
+

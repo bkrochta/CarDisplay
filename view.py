@@ -14,11 +14,12 @@ OUT_THERM_ADDR = '28-0315977942f6'
 in_temp = '--'
 out_temp = '--'
 direction = '--'
-speed = '--'
+speed = 0
 avg_speed = 20
 dst_traveled = 500
 quit = 0
 scale = 4.5
+time_updated = False
 
 def __in_temp_thread():
     global in_temp
@@ -35,12 +36,17 @@ def __out_temp_thread():
     global out_temp
 
     out_therm = thermometer.Thermometer(OUT_THERM_ADDR)
+    out_temp = out_therm.get_temp()
+    if out_temp == None:
+        out_temp = 'er'
     while quit == 0:
+        while speed < 10:
+            while speed < 10:
+                time.sleep(2)
+            time.sleep(60)
         out_temp = out_therm.get_temp()
         if out_temp == None:
             out_temp = 'er'
-        while speed < 5:
-            time.sleep(20)
         time.sleep(5)
 
 
@@ -48,18 +54,23 @@ def __gps_thread():
     global speed
     global avg_speed
     global dst_traveled
+    global time_updated
 
     g = gps.GPS()
     g.update_time()
+    time_updated = True
     while quit == 0:
-        g.update()
-        speed = math.floor(g.get_speed())
+        s = g.get_speed()
+        if s == None:
+            time.sleep(0.100)
+        else:
+            speed = math.floor(s)
         # direction = g.get_heading()
         # if direction == None:
         #     direction = '--'
         # avg_speed = int(g.get_average_speed())
         # dst_traveled = int(g.get_distance_traveled())
-        time.sleep(0.100)
+        #time.sleep(0.200)
 
 
 def __mpu_thread():
@@ -85,9 +96,9 @@ root.bind("<Escape>", __quit)
 
 # Create data labels
 clock_label = tkinter.Label(root, font=('arial',int(300/scale), 'bold'), fg='red', bg='black')
-dir_label = tkinter.Label(root, font=('arial',int(200/scale), 'bold'), fg='red', bg='black')
-temp_in_label = tkinter.Label(root, font=('arial',int(200/scale), 'bold'), fg='red', bg='black')
-temp_out_label = tkinter.Label(root, font=('arial',int(200/scale), 'bold'), fg='red', bg='black')
+dir_label = tkinter.Label(root, font=('arial',int(200/scale), 'bold'), fg='red', bg='black', anchor='n')
+temp_in_label = tkinter.Label(root, font=('arial',int(200/scale), 'bold'), fg='red', bg='black',anchor='sw')
+temp_out_label = tkinter.Label(root, font=('arial',int(200/scale), 'bold'), fg='red', bg='black', anchor='ne')
 speed_label = tkinter.Label(root, font=('arial',int(800/scale), 'bold'), fg='red', bg='black')
 # avg_speed_label = tkinter.Label(root, font=('arial',int(200/scale), 'bold'), fg='red', bg='black')
 # dst_traveled_label = tkinter.Label(root, font=('arial',int(200/scale), 'bold'), fg='red', bg='black')
@@ -103,8 +114,8 @@ in_label = tkinter.Label(root, font=('arial',int(100/scale), 'bold'), fg='red', 
 # Place data labels
 clock_label.place(relx=0.225, rely=0, relheight=0.2, relwidth=0.55)
 dir_label.place(relx=0, rely=0, relheight=0.2, relwidth=0.225)
-temp_in_label.place(relx=0, rely=0.8, relheight=0.2, relwidth=0.225)
-temp_out_label.place(relx=0.775, rely=0, relheight=0.2, relwidth=0.225)
+temp_in_label.place(relx=0, rely=0.8, relheight=0.2, relwidth=0.3)
+temp_out_label.place(relx=0.7, rely=0, relheight=0.2, relwidth=0.3)
 speed_label.place(relx=0.2, rely=0.2, relheight=0.6, relwidth=0.6)
 # avg_speed_label.place(relx=0.2, rely=0.8, relheight=0.2, relwidth=0.2)
 # dst_traveled_label.place(relx=0.4, rely=0.8, relheight=0.2, relwidth=0.2)
@@ -135,7 +146,7 @@ gps_thread.start()
 # MAIN LOOP #
 while True:
     dir_label.config(text=direction)
-    if speed != '--':
+    if time_updated:
         clock_label.config(text=datetime.datetime.now().strftime('%-I:%M'))
     temp_in_label.config(text=str(in_temp) + '\u00b0F')
     temp_out_label.config(text=str(out_temp) + '\u00b0F')
@@ -145,4 +156,5 @@ while True:
 
     root.update_idletasks()
     root.update()
-    time.sleep(0.200)
+    time.sleep(0.250)
+
