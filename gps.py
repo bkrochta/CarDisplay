@@ -28,9 +28,10 @@ class GPS:
         Returns:
             speed (float) : in m/s or mph, depending on self.metric
         """
-        self.speed = self.gps_thread.data_stream.speed
-        if self.speed == 'n/a':
+        speed = self.gps_thread.data_stream.speed
+        if speed == 'n/a':
             return None
+        self.speed = speed
         if self.metric:
             return self.speed
         else:
@@ -103,6 +104,7 @@ class GPS:
             t = self.gps_thread.data_stream.time
             if t != 'n/a':
                 break;
+            time.sleep(.1)
         split = t.split("-")
         year = split[0]
         month = split[1]

@@ -114,18 +114,18 @@ as_label = tkinter.Label(root, font=('arial',int(50/scale), 'bold'), fg='red', b
 dt_label = tkinter.Label(root, font=('arial',int(50/scale), 'bold'), fg='red', bg='black', text='Dst Traveled:')
 
 # Place data labels
-clock_label.place(relx=0.3, rely=0, relheight=0.21, relwidth=0.4)
+clock_label.place(relx=0.29, rely=0, relheight=0.21, relwidth=0.42)
 dir_label.place(relx=0, rely=0, relheight=0.2, relwidth=0.2)
 #temp_in_label.place(relx=0, rely=0.8, relheight=0.2, relwidth=0.3)
-temp_out_label.place(relx=0.78, rely=0, relheight=0.2, relwidth=0.155)
+temp_out_label.place(relx=0.775, rely=0, relheight=0.2, relwidth=0.175)
 speed_label.place(relx=0.2, rely=0.21, relheight=0.58, relwidth=0.6)
 avg_speed_label.place(relx=0, rely=0.8, relheight=0.2, relwidth=0.15)
 dst_traveled_label.place(relx=0.2, rely=0.8, relheight=0.2, relwidth=0.2)
 
 # Place unit and description labels
 #in_label.place(relx=0.0, rely=0.775, relheight=0.05, relwidth=0.075)
-out_f_label.place(relx=0.94, rely=0.02, relheight=0.1, relwidth=0.05)
-mph_label1.place(relx=0.7, rely=0.625, relheight=0.1, relwidth=0.150)
+out_f_label.place(relx=0.94, rely=0.02, relheight=0.1, relwidth=0.06)
+#mph_label1.place(relx=0.7, rely=0.625, relheight=0.1, relwidth=0.150)
 mph_label2.place(relx=0.14, rely=0.925, relheight=0.05, relwidth=0.06)
 miles_label.place(relx=0.38, rely=0.925, relheight=0.05, relwidth=0.075)
 as_label.place(relx=0.0, rely=0.79, relheight=0.05, relwidth=0.14)
