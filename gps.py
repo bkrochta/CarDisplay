@@ -29,13 +29,14 @@ class GPS:
             speed (float) : in m/s or mph, depending on self.metric
         """
         speed = self.gps_thread.data_stream.speed
-        if speed == 'n/a':
-            return None
-        self.speed = speed
-        if self.metric:
-            return self.speed
+        if speed != 'n/a':
+            self.speed = speed
+            if self.metric:
+                return self.speed
+            else:
+                return self.speed * 2.23694
         else:
-            return self.speed * 2.23694
+            return None
 
 
     def get_average_speed(self, metric=None):
@@ -119,4 +120,3 @@ class GPS:
         split = str(dateeast).split(" ")
         os.system("sudo date +%D -s " + split[0])
         os.system("sudo date +%T -s " + split[1][:-6])
-
