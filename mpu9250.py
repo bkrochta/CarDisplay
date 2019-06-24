@@ -2,8 +2,8 @@ import smbus
 import time
 import numpy as np
 import math
+import sys
 from scipy import linalg
-import pickle
 
 ### https://www.invensense.com/wp-content/uploads/2015/02/RM-MPU-9250A-00-v1.6.pdf
 ## MPU9250 Default I2C slave address
@@ -88,7 +88,7 @@ class MPU9250:
     def __init__(self, calibrate=False, address=SLAVE_ADDRESS,):
         self.bus = smbus.SMBus(1)
         self.address = address
-        self.config(GFS_250, AFS_2G, AK8963_BIT_16, AK8963_MODE_C8HZ)
+        self.config(GFS_250, AFS_2G, AK8963_BIT_16, AK8963_MODE_C100HZ)
 
         # initialize values
         self.max_x = -100000
@@ -117,13 +117,11 @@ class MPU9250:
 
     def config(self, gfs, afs, mfs, mode):
         """ Configure MPU9250 and AK8963
-
         Args:
             gfd (hex): Gyroscope Full Scale Select(default:GFS_250[+250dps])
             afs (hex): Accelerometer Full Scale Select(default:AFS_2G[2g])
             mfs (hex) : Magneto Scale Select(default:AK8963_BIT_16[16bit])
             mode (hex) : Magenetometer mode select(default:AK8963_MODE_C8HZ[Continous 8Hz])
-
         """
         if gfs == GFS_250:
             self.gres = 250.0/32768.0
@@ -165,10 +163,10 @@ class MPU9250:
         self.bus.write_byte_data(self.address, ACCEL_CONFIG_2, 0x05)
         # DLPF_CFG internal low pass filter for accelerometer to 10 Hz
         self.bus.write_byte_data(self.address, CONFIG, 0x05)
-        """
+
         # sample rate divider
         self.bus.write_byte_data(self.address, SMPLRT_DIV, 0x04)
-        """
+
         # magnetometer allow change to bypass multiplexer
         self.bus.write_byte_data(self.address, USER_CTRL, 0x00)
         time.sleep(0.01)
@@ -198,7 +196,6 @@ class MPU9250:
 
     def read_accel_raw(self):
         """ Read accelerometer
-
         Returns:
             x, y, x (float float float) : g
         """
@@ -215,7 +212,6 @@ class MPU9250:
 
     def read_gyro_raw(self):
         """ Read gyroscope
-
         Returns:
             x, y, z : (float float float) : rad/sec
         """
@@ -233,10 +229,8 @@ class MPU9250:
 
     def read_magnet_raw(self):
         """ Read magnetometer
-
         Returns:
             x, y, z (float float float) : in uT
-
         """
         x=0
         y=0
@@ -244,7 +238,7 @@ class MPU9250:
 
         # wait until data ready and no overflow
         while self.bus.read_byte_data(AK8963_SLAVE_ADDRESS, AK8963_ST1) == 0x00:
-            time.sleep(0.100)
+            continue
 
 
         # read raw data (little endian)
@@ -264,11 +258,9 @@ class MPU9250:
 
     def conv_data(self, data1, data2):
         """ Convert raw binary data to float
-
         Args:
             data1 (bits): LSB
             data2 (bits): MSB
-
         Returns:
             int16bit: MSB+LSB
         """
@@ -277,51 +269,167 @@ class MPU9250:
             value -= (1<<16)
         return value
 
+    # def read_magnet(self):
+    #     """ Get a sample from magntometer with correction if calibrated.
+    #
+    #     Returns:
+    #         s (list) : The sample in uT, [x,y,z] (corrected if performed calibration).
+    #     """
+    #     x,y,z = self.read_magnet_raw()
+    #     s = np.array([x,y,z]).reshape(3, 1)
+    #     s = np.dot(self.A_1, s - self.b)
+    #     return [s[0,0], s[1,0], s[2,0]]
 
     def read_magnet(self):
         """ Get a sample from magntometer with correction if calibrated.
-
         Returns:
             s (list) : The sample in uT, [x,y,z] (corrected if performed calibration).
         """
         x,y,z = self.read_magnet_raw()
-
-        self.x_hist.insert(0, x)
-        self.y_hist.insert(0, y)
-        self.z_hist.insert(0, z)
-        if len(self.x_hist) > 2500:
-            self.x_hist.pop()
-            self.y_hist.pop()
-            self.z_hist.pop()
-        self.max_x = max(self.x_hist)
-        self.max_y = max(self.y_hist)
-        self.max_z = max(self.z_hist)
-        self.min_x = min(self.x_hist)
-        self.min_y = min(self.y_hist)
-        self.min_z = min(self.z_hist)
-
         x -= (self.max_x+self.min_x)/2
         y -= (self.max_y+self.min_y)/2
         z -= (self.max_z+self.min_z)/2
 
-        if len(self.x_hist) > 1:
-            x = float((x - self.min_x) / (self.max_x - self.min_x) * 2 - 1)
-            y = float((y - self.min_y) / (self.max_y - self.min_y) * 2 - 1)
-            z = float((z - self.min_z) / (self.max_z - self.min_z) * 2 - 1)
-
+        x = float((x - self.min_x) / (self.max_x - self.min_x) * 2 - 1)
+        y = float((y - self.min_y) / (self.max_y - self.min_y) * 2 - 1)
+        z = float((z - self.min_z) / (self.max_z - self.min_z) * 2 - 1)
 
         return [x, y, z]
 
+    def calibrate(self):
+        print('Collecting samples (Ctrl-C to stop and perform calibration)')
+        try:
+            s = []
+            n = 0
+            while True:
+                s.append(self.read_magnet_raw())
+                n += 1
+                sys.stdout.write('\rTotal: %d' % n)
+                sys.stdout.flush()
+        except KeyboardInterrupt:
+            pass
+
+
+
+        for trio in s:
+            if trio[0] > self.max_x:
+                self.max_x = trio[0]
+            if trio[0] < self.min_x:
+                self.min_x = trio[0]
+            if trio[1] > self.max_y:
+                self.max_y = trio[1]
+            if trio[1] < self.min_y:
+                self.min_y = trio[1]
+            if trio[2] > self.max_z:
+                self.max_z = trio[2]
+            if trio[2] < self.min_z:
+                self.min_z = trio[2]
+
+        print(self.min_x,self.max_x,self.min_y,self.max_y,self.min_z,self.max_z)
+
+
+
+
+    # def calibrate(self):
+    #     """ Performs calibration. """
+    #
+    #     print('Collecting samples (Ctrl-C to stop and perform calibration)')
+    #
+    #     try:
+    #         s = []
+    #         n = 0
+    #         while True:
+    #             s.append(self.read_magnet())
+    #             n += 1
+    #             sys.stdout.write('\rTotal: %d' % n)
+    #             sys.stdout.flush()
+    #             time.sleep(.25)
+    #     except KeyboardInterrupt:
+    #         pass
+    #
+    #     # ellipsoid fit
+    #     s = np.array(s).T
+    #     M, n, d = self.__ellipsoid_fit(s)
+    #
+    #     # calibration parameters
+    #     # note: some implementations of sqrtm return complex type, taking real
+    #     M_1 = linalg.inv(M)
+    #     self.b = -np.dot(M_1, n)
+    #     self.A_1 = np.real(self.F / np.sqrt(np.dot(n.T, np.dot(M_1, n)) - d) * linalg.sqrtm(M))
+    #     np.save('b', self.b)
+    #     np.save('a', self.A_1)
+    #
+    #
+    # def __ellipsoid_fit(self, s):
+    #     """ Estimate ellipsoid parameters from a set of points.
+    #
+    #     Args:
+    #         s : array_like
+    #           The samples (M,N) where M=3 (x,y,z) and N=number of samples.
+    #
+    #     Returns:
+    #         M, n, d (array_like, array_like, float) : The ellipsoid parameters M, n, d.
+    #
+    #     """
+    #
+    #     # D (samples)
+    #     print(s)
+    #     D = np.array([s[0]**2., s[1]**2., s[2]**2.,
+    #                   2.*s[1]*s[2], 2.*s[0]*s[2], 2.*s[0]*s[1],
+    #                   2.*s[0], 2.*s[1], 2.*s[2], np.ones_like(s[0])])
+    #
+    #     # S, S_11, S_12, S_21, S_22 (eq. 11)
+    #
+    #     S = np.dot(D, D.T)
+    #     S_11 = S[:6,:6]
+    #     S_12 = S[:6,6:]
+    #     S_21 = S[6:,:6]
+    #     S_22 = S[6:,6:]
+    #
+    #     # C (Eq. 8, k=4)
+    #     C = np.array([[-1,  1,  1,  0,  0,  0],
+    #                   [ 1, -1,  1,  0,  0,  0],
+    #                   [ 1,  1, -1,  0,  0,  0],
+    #                   [ 0,  0,  0, -4,  0,  0],
+    #                   [ 0,  0,  0,  0, -4,  0],
+    #                   [ 0,  0,  0,  0,  0, -4]])
+    #
+    #     # v_1 (eq. 15, solution)
+    #     E = np.dot(linalg.inv(C),
+    #                S_11 - np.dot(S_12, np.dot(linalg.inv(S_22), S_21)))
+    #
+    #     E_w, E_v = np.linalg.eig(E)
+    #
+    #     v_1 = E_v[:, np.argmax(E_w)]
+    #     if v_1[0] < 0: v_1 = -v_1
+    #
+    #     # v_2 (eq. 13, solution)
+    #     v_2 = np.dot(np.dot(-np.linalg.inv(S_22), S_21), v_1)
+    #
+    #     # quadric-form parameters
+    #     M = np.array([[v_1[0], v_1[3], v_1[4]],
+    #                   [v_1[3], v_1[1], v_1[5]],
+    #                   [v_1[4], v_1[5], v_1[2]]])
+    #     n = np.array([[v_2[0]],
+    #                   [v_2[1]],
+    #                   [v_2[2]]])
+    #     d = v_2[3]
+    #
+    #     return M, n, d
 
     def get_heading(self):
         """ Get magnetic heading
-
         Returns:
             heading (str) : Heading (N, NE, E, SE, S, SW, W, NW)
         """
         mag = self.read_magnet()
         x,y,z = self.read_accel_raw()
         acc = [x,y,z]
+        heading = math.atan2(mag[2],mag[1])*(180/math.pi)
+        if heading < 0:
+            heading += 360
+
+        print('not compensated %f ' % heading)
 
         #Normalize accelerometer raw values.
         accYnorm = acc[1]/math.sqrt(acc[1] * acc[1] + acc[2] * acc[2] + acc[0] * acc[0])
@@ -363,7 +471,161 @@ class MPU9250:
         else:
             return "N"
 
-m = MPU9250()
 
+# class MPU9250:
+#     ## Constructor
+#     #  @param [in] address MPU-9250 I2C slave address default:0x68
+#     def __init__(self, calibrate=False, address=SLAVE_ADDRESS,):
+#         self.bus = smbus.SMBus(1)
+#         self.address = address
+#         self.config(GFS_250, AFS_2G, AK8963_BIT_16, AK8963_MODE_C8HZ)
+#
+#         # initialize values
+#         self.max_x = -100000
+#         self.max_y = -100000
+#         self.max_z = -100000
+#         self.min_x = 100000
+#         self.min_y = 100000
+#         self.min_z = 100000
+#
+#         self.x_hist = []
+#         self.y_hist = []
+#         self.z_hist = []
+#
+#         self.F   = 1
+#         if not calibrate:
+#             try:
+#                 self.b = np.load('b.npy')
+#                 self.A_1 = np.load('a.npy')
+#             except IOError as e:
+#                 print("No calibration data")
+#                 self.b   = np.zeros([3, 1])
+#                 self.A_1 = np.eye(3)
+#         else:
+#             self.b   = np.zeros([3, 1])
+#             self.A_1 = np.eye(3)
+#
+#
+#     def read_magnet_raw(self):
+#         """ Read magnetometer
+#
+#         Returns:
+#             x, y, z (float float float) : in uT
+#
+#         """
+#         x=0
+#         y=0
+#         z=0
+#
+#         # wait until data ready and no overflow
+#         while self.bus.read_byte_data(AK8963_SLAVE_ADDRESS, AK8963_ST1) == 0x00:
+#             time.sleep(0.100)
+#
+#
+#         # read raw data (little endian)
+#         data = self.bus.read_i2c_block_data(AK8963_SLAVE_ADDRESS, AK8963_MAGNET_OUT, 7)
+#
+#         # check overflow
+#         if (data[6] & 0x08)!=0x08:
+#             x = self.conv_data(data[0], data[1])
+#             y = self.conv_data(data[2], data[3])
+#             z = self.conv_data(data[4], data[5])
+#
+#             x = round(x * self.mres * self.magXcoef, 3)
+#             y = round(y * self.mres * self.magYcoef, 3)
+#             z = round(z * self.mres * self.magZcoef, 3)
+#
+#         return -y, -x, z
+#
+#
+#     def read_magnet(self):
+#         """ Get a sample from magntometer with correction if calibrated.
+#
+#         Returns:
+#             s (list) : The sample in uT, [x,y,z] (corrected if performed calibration).
+#         """
+#         x,y,z = self.read_magnet_raw()
+#
+#         self.x_hist.insert(0, x)
+#         self.y_hist.insert(0, y)
+#         self.z_hist.insert(0, z)
+#         if len(self.x_hist) > 2500:
+#             self.x_hist.pop()
+#             self.y_hist.pop()
+#             self.z_hist.pop()
+#         self.max_x = max(self.x_hist)
+#         self.max_y = max(self.y_hist)
+#         self.max_z = max(self.z_hist)
+#         self.min_x = min(self.x_hist)
+#         self.min_y = min(self.y_hist)
+#         self.min_z = min(self.z_hist)
+#
+#         x -= (self.max_x+self.min_x)/2
+#         y -= (self.max_y+self.min_y)/2
+#         z -= (self.max_z+self.min_z)/2
+#
+#         if len(self.x_hist) > 1:
+#             x = float((x - self.min_x) / (self.max_x - self.min_x) * 2 - 1)
+#             y = float((y - self.min_y) / (self.max_y - self.min_y) * 2 - 1)
+#             z = float((z - self.min_z) / (self.max_z - self.min_z) * 2 - 1)
+#
+#
+#         return [x, y, z]
+#
+#
+#     def get_heading(self):
+#         """ Get magnetic heading
+#
+#         Returns:
+#             heading (str) : Heading (N, NE, E, SE, S, SW, W, NW)
+#         """
+#         mag = self.read_magnet()
+#         x,y,z = self.read_accel_raw()
+#         acc = [x,y,z]
+#
+#         #Normalize accelerometer raw values.
+#         accYnorm = acc[1]/math.sqrt(acc[1] * acc[1] + acc[2] * acc[2] + acc[0] * acc[0])
+#         accZnorm = acc[2]/math.sqrt(acc[1] * acc[1] + acc[2] * acc[2] + acc[0] * acc[0])
+#
+#         #Calculate pitch and roll
+#         pitch = math.asin(accYnorm)
+#         roll = -math.asin(accZnorm/math.cos(pitch))
+#
+#         #Calculate the new tilt compensated values
+#         magYcomp = mag[1]*math.cos(pitch)+mag[0]*math.sin(pitch)
+#         magZcomp = mag[1]*math.sin(roll)*math.sin(pitch)+mag[2]*math.cos(roll)+mag[0]*math.sin(roll)*math.cos(pitch)
+#
+#         #Calculate heading
+#         heading = 180*math.atan2(magZcomp,magYcomp)/math.pi
+#
+#         #Convert heading to 0 - 360
+#         if heading < 0:
+#             heading += 360;
+#
+#
+#
+#         if(heading <= 22.5):
+#             return "N"
+#         elif(heading < 67.5):
+#             return "NE"
+#         elif(heading <= 112.5):
+#             return "E"
+#         elif(heading < 157.5):
+#             return "SE"
+#         elif(heading <= 202.5):
+#             return "S"
+#         elif(heading < 247.5):
+#             return "SW"
+#         elif(heading <= 292.5):
+#             return "W"
+#         elif(heading < 337.5):
+#             return "NW"
+#         else:
+#             return "N"
+
+m = MPU9250()
+m.calibrate()
 while True:
     print(m.get_heading())
+
+    time.sleep(1)
