@@ -3,9 +3,9 @@ import time
 import numpy as np
 import math
 import sys
-from scipy import linalg
 
-### https://www.invensense.com/wp-content/uploads/2015/02/RM-MPU-9250A-00-v1.6.pdf
+
+### https:#www.invensense.com/wp-content/uploads/2015/02/RM-MPU-9250A-00-v1.6.pdf
 ## MPU9250 Default I2C slave address
 SLAVE_ADDRESS        = 0x68
 ## AK8963 I2C slave address
@@ -91,29 +91,8 @@ class MPU9250:
         self.config(GFS_250, AFS_2G, AK8963_BIT_16, AK8963_MODE_C100HZ)
 
         # initialize values
-        self.max_x = -100000
-        self.max_y = -100000
-        self.max_z = -100000
-        self.min_x = 100000
-        self.min_y = 100000
-        self.min_z = 100000
-
-        self.x_hist = []
-        self.y_hist = []
-        self.z_hist = []
-
-        self.F   = 1
-        if not calibrate:
-            try:
-                self.b = np.load('b.npy')
-                self.A_1 = np.load('a.npy')
-            except IOError as e:
-                print("No calibration data")
-                self.b   = np.zeros([3, 1])
-                self.A_1 = np.eye(3)
-        else:
-            self.b   = np.zeros([3, 1])
-            self.A_1 = np.eye(3)
+        self.mag_bias = [0,0,0]
+        self.mag_scale = [0,0,0]
 
     def config(self, gfs, afs, mfs, mode):
         """ Configure MPU9250 and AK8963
@@ -175,6 +154,10 @@ class MPU9250:
         self.bus.write_byte_data(self.address, INT_PIN_CFG, 0x02)
         time.sleep(0.1)
 
+        # set power down mode
+        self.bus.write_byte_data(AK8963_SLAVE_ADDRESS, AK8963_CNTL1, 0x00)
+        time.sleep(0.1)
+
         # set read FuseROM mode
         self.bus.write_byte_data(AK8963_SLAVE_ADDRESS, AK8963_CNTL1, 0x1F)
         time.sleep(0.1)
@@ -200,6 +183,7 @@ class MPU9250:
             x, y, x (float float float) : g
         """
         data = self.bus.read_i2c_block_data(self.address, ACCEL_OUT, 6)
+
         x = self.conv_data(data[1], data[0])
         y = self.conv_data(data[3], data[2])
         z = self.conv_data(data[5], data[4])
@@ -221,9 +205,9 @@ class MPU9250:
         y = self.conv_data(data[3], data[2])
         z = self.conv_data(data[5], data[4])
 
-        x = round(x*self.gres, 3)
-        y = round(y*self.gres, 3)
-        z = round(z*self.gres, 3)
+        x = round(x*self.gres, 3)#-3.262
+        y = round(y*self.gres, 3)#+.03
+        z = round(z*self.gres, 3)#+.604
 
         return x, y, z
 
@@ -232,14 +216,9 @@ class MPU9250:
         Returns:
             x, y, z (float float float) : in uT
         """
-        x=0
-        y=0
-        z=0
-
         # wait until data ready and no overflow
         while self.bus.read_byte_data(AK8963_SLAVE_ADDRESS, AK8963_ST1) == 0x00:
             continue
-
 
         # read raw data (little endian)
         data = self.bus.read_i2c_block_data(AK8963_SLAVE_ADDRESS, AK8963_MAGNET_OUT, 7)
@@ -254,7 +233,9 @@ class MPU9250:
             y = round(y * self.mres * self.magYcoef, 3)
             z = round(z * self.mres * self.magZcoef, 3)
 
-        return -y, -x, z
+            return y, x, -z
+        else: # overflow
+            return 0,0,0
 
     def conv_data(self, data1, data2):
         """ Convert raw binary data to float
@@ -269,16 +250,6 @@ class MPU9250:
             value -= (1<<16)
         return value
 
-    # def read_magnet(self):
-    #     """ Get a sample from magntometer with correction if calibrated.
-    #
-    #     Returns:
-    #         s (list) : The sample in uT, [x,y,z] (corrected if performed calibration).
-    #     """
-    #     x,y,z = self.read_magnet_raw()
-    #     s = np.array([x,y,z]).reshape(3, 1)
-    #     s = np.dot(self.A_1, s - self.b)
-    #     return [s[0,0], s[1,0], s[2,0]]
 
     def read_magnet(self):
         """ Get a sample from magntometer with correction if calibrated.
@@ -286,17 +257,21 @@ class MPU9250:
             s (list) : The sample in uT, [x,y,z] (corrected if performed calibration).
         """
         x,y,z = self.read_magnet_raw()
-        x -= (self.max_x+self.min_x)/2
-        y -= (self.max_y+self.min_y)/2
-        z -= (self.max_z+self.min_z)/2
+        x -= self.mag_bias[0]
+        y -= self.mag_bias[1]
+        z -= self.mag_bias[2]
 
-        x = float((x - self.min_x) / (self.max_x - self.min_x) * 2 - 1)
-        y = float((y - self.min_y) / (self.max_y - self.min_y) * 2 - 1)
-        z = float((z - self.min_z) / (self.max_z - self.min_z) * 2 - 1)
+        x *= self.mag_scale[0]
+        y *= self.mag_scale[1]
+        z *= self.mag_scale[2]
 
         return [x, y, z]
 
     def calibrate(self):
+        """ Calibrates magnetometer. Updates mag_bias and mag_scale.
+        Returns:
+            void
+        """
         print('Collecting samples (Ctrl-C to stop and perform calibration)')
         try:
             s = []
@@ -306,116 +281,48 @@ class MPU9250:
                 n += 1
                 sys.stdout.write('\rTotal: %d' % n)
                 sys.stdout.flush()
+                time.sleep(0.01)
         except KeyboardInterrupt:
             pass
 
-
+        max_x = -32760
+        max_y = -32760
+        max_z = -32760
+        min_x = 32760
+        min_y = 32760
+        min_z = 32760
 
         for trio in s:
-            if trio[0] > self.max_x:
-                self.max_x = trio[0]
-            if trio[0] < self.min_x:
-                self.min_x = trio[0]
-            if trio[1] > self.max_y:
-                self.max_y = trio[1]
-            if trio[1] < self.min_y:
-                self.min_y = trio[1]
-            if trio[2] > self.max_z:
-                self.max_z = trio[2]
-            if trio[2] < self.min_z:
-                self.min_z = trio[2]
+            if trio[0] > max_x:
+                max_x = trio[0]
+            if trio[0] < min_x:
+                min_x = trio[0]
+            if trio[1] > max_y:
+                max_y = trio[1]
+            if trio[1] < min_y:
+                min_y = trio[1]
+            if trio[2] > max_z:
+                max_z = trio[2]
+            if trio[2] < min_z:
+                min_z = trio[2]
 
-        print(self.min_x,self.max_x,self.min_y,self.max_y,self.min_z,self.max_z)
+        self.mag_bias[0]  = (max_x + min_x)/2;  # get average x mag bias in counts
+        self.mag_bias[1]  = (max_y + min_y)/2;  # get average y mag bias in counts
+        self.mag_bias[2]  = (max_z + min_z)/2;  # get average z mag bias in counts
 
+        self.mag_scale[0]  = (max_x - min_x) / 2;
+        # Get average y axis max chord length in counts
+        self.mag_scale[1]  = (max_y - min_y) / 2;
+        # Get average z axis max chord length in counts
+        self.mag_scale[2]  = (max_z - min_z) / 2;
 
+        avg_rad = self.mag_scale[0] + self.mag_scale[1] + self.mag_scale[2];
+        avg_rad /= 3.0;
 
+        self.mag_scale[0] = avg_rad / (float(self.mag_scale[0]));
+        self.mag_scale[1] = avg_rad / (float(self.mag_scale[1]));
+        self.mag_scale[2] = avg_rad / (float(self.mag_scale[2]));
 
-    # def calibrate(self):
-    #     """ Performs calibration. """
-    #
-    #     print('Collecting samples (Ctrl-C to stop and perform calibration)')
-    #
-    #     try:
-    #         s = []
-    #         n = 0
-    #         while True:
-    #             s.append(self.read_magnet())
-    #             n += 1
-    #             sys.stdout.write('\rTotal: %d' % n)
-    #             sys.stdout.flush()
-    #             time.sleep(.25)
-    #     except KeyboardInterrupt:
-    #         pass
-    #
-    #     # ellipsoid fit
-    #     s = np.array(s).T
-    #     M, n, d = self.__ellipsoid_fit(s)
-    #
-    #     # calibration parameters
-    #     # note: some implementations of sqrtm return complex type, taking real
-    #     M_1 = linalg.inv(M)
-    #     self.b = -np.dot(M_1, n)
-    #     self.A_1 = np.real(self.F / np.sqrt(np.dot(n.T, np.dot(M_1, n)) - d) * linalg.sqrtm(M))
-    #     np.save('b', self.b)
-    #     np.save('a', self.A_1)
-    #
-    #
-    # def __ellipsoid_fit(self, s):
-    #     """ Estimate ellipsoid parameters from a set of points.
-    #
-    #     Args:
-    #         s : array_like
-    #           The samples (M,N) where M=3 (x,y,z) and N=number of samples.
-    #
-    #     Returns:
-    #         M, n, d (array_like, array_like, float) : The ellipsoid parameters M, n, d.
-    #
-    #     """
-    #
-    #     # D (samples)
-    #     print(s)
-    #     D = np.array([s[0]**2., s[1]**2., s[2]**2.,
-    #                   2.*s[1]*s[2], 2.*s[0]*s[2], 2.*s[0]*s[1],
-    #                   2.*s[0], 2.*s[1], 2.*s[2], np.ones_like(s[0])])
-    #
-    #     # S, S_11, S_12, S_21, S_22 (eq. 11)
-    #
-    #     S = np.dot(D, D.T)
-    #     S_11 = S[:6,:6]
-    #     S_12 = S[:6,6:]
-    #     S_21 = S[6:,:6]
-    #     S_22 = S[6:,6:]
-    #
-    #     # C (Eq. 8, k=4)
-    #     C = np.array([[-1,  1,  1,  0,  0,  0],
-    #                   [ 1, -1,  1,  0,  0,  0],
-    #                   [ 1,  1, -1,  0,  0,  0],
-    #                   [ 0,  0,  0, -4,  0,  0],
-    #                   [ 0,  0,  0,  0, -4,  0],
-    #                   [ 0,  0,  0,  0,  0, -4]])
-    #
-    #     # v_1 (eq. 15, solution)
-    #     E = np.dot(linalg.inv(C),
-    #                S_11 - np.dot(S_12, np.dot(linalg.inv(S_22), S_21)))
-    #
-    #     E_w, E_v = np.linalg.eig(E)
-    #
-    #     v_1 = E_v[:, np.argmax(E_w)]
-    #     if v_1[0] < 0: v_1 = -v_1
-    #
-    #     # v_2 (eq. 13, solution)
-    #     v_2 = np.dot(np.dot(-np.linalg.inv(S_22), S_21), v_1)
-    #
-    #     # quadric-form parameters
-    #     M = np.array([[v_1[0], v_1[3], v_1[4]],
-    #                   [v_1[3], v_1[1], v_1[5]],
-    #                   [v_1[4], v_1[5], v_1[2]]])
-    #     n = np.array([[v_2[0]],
-    #                   [v_2[1]],
-    #                   [v_2[2]]])
-    #     d = v_2[3]
-    #
-    #     return M, n, d
 
     def get_heading(self):
         """ Get magnetic heading
@@ -425,32 +332,31 @@ class MPU9250:
         mag = self.read_magnet()
         x,y,z = self.read_accel_raw()
         acc = [x,y,z]
-        heading = math.atan2(mag[2],mag[1])*(180/math.pi)
-        if heading < 0:
-            heading += 360
-
-        print('not compensated %f ' % heading)
-
-        #Normalize accelerometer raw values.
-        accYnorm = acc[1]/math.sqrt(acc[1] * acc[1] + acc[2] * acc[2] + acc[0] * acc[0])
-        accZnorm = acc[2]/math.sqrt(acc[1] * acc[1] + acc[2] * acc[2] + acc[0] * acc[0])
-
-        #Calculate pitch and roll
-        pitch = math.asin(accYnorm)
-        roll = -math.asin(accZnorm/math.cos(pitch))
-
-        #Calculate the new tilt compensated values
-        magYcomp = mag[1]*math.cos(pitch)+mag[0]*math.sin(pitch)
-        magZcomp = mag[1]*math.sin(roll)*math.sin(pitch)+mag[2]*math.cos(roll)+mag[0]*math.sin(roll)*math.cos(pitch)
-
-        #Calculate heading
-        heading = 180*math.atan2(magZcomp,magYcomp)/math.pi
+        heading = math.atan2(mag[1],mag[2])*(180/math.pi)
+        # if heading < 0:
+        #     heading += 360
+        #
+        # print('not compensated %f ' % heading)
+        #
+        # #Normalize accelerometer raw values.
+        # accYnorm = acc[1]/math.sqrt(acc[1] * acc[1] + acc[2] * acc[2] + acc[0] * acc[0])
+        # accZnorm = acc[2]/math.sqrt(acc[1] * acc[1] + acc[2] * acc[2] + acc[0] * acc[0])
+        #
+        # #Calculate pitch and roll
+        # pitch = math.asin(accYnorm)
+        # roll = -math.asin(accZnorm/math.cos(pitch))
+        #
+        # #Calculate the new tilt compensated values
+        # magYcomp = mag[1]*math.cos(pitch)+mag[0]*math.sin(pitch)
+        # magZcomp = mag[1]*math.sin(roll)*math.sin(pitch)+mag[2]*math.cos(roll)+mag[0]*math.sin(roll)*math.cos(pitch)
+        #
+        # #Calculate heading
+        # heading = 180*math.atan2(magZcomp,magYcomp)/math.pi
 
         #Convert heading to 0 - 360
         if heading < 0:
             heading += 360;
-
-
+        #return heading
 
         if(heading <= 22.5):
             return "N"
@@ -472,160 +378,191 @@ class MPU9250:
             return "N"
 
 
-# class MPU9250:
-#     ## Constructor
-#     #  @param [in] address MPU-9250 I2C slave address default:0x68
-#     def __init__(self, calibrate=False, address=SLAVE_ADDRESS,):
-#         self.bus = smbus.SMBus(1)
-#         self.address = address
-#         self.config(GFS_250, AFS_2G, AK8963_BIT_16, AK8963_MODE_C8HZ)
-#
-#         # initialize values
-#         self.max_x = -100000
-#         self.max_y = -100000
-#         self.max_z = -100000
-#         self.min_x = 100000
-#         self.min_y = 100000
-#         self.min_z = 100000
-#
-#         self.x_hist = []
-#         self.y_hist = []
-#         self.z_hist = []
-#
-#         self.F   = 1
-#         if not calibrate:
-#             try:
-#                 self.b = np.load('b.npy')
-#                 self.A_1 = np.load('a.npy')
-#             except IOError as e:
-#                 print("No calibration data")
-#                 self.b   = np.zeros([3, 1])
-#                 self.A_1 = np.eye(3)
-#         else:
-#             self.b   = np.zeros([3, 1])
-#             self.A_1 = np.eye(3)
-#
-#
-#     def read_magnet_raw(self):
-#         """ Read magnetometer
-#
-#         Returns:
-#             x, y, z (float float float) : in uT
-#
-#         """
-#         x=0
-#         y=0
-#         z=0
-#
-#         # wait until data ready and no overflow
-#         while self.bus.read_byte_data(AK8963_SLAVE_ADDRESS, AK8963_ST1) == 0x00:
-#             time.sleep(0.100)
-#
-#
-#         # read raw data (little endian)
-#         data = self.bus.read_i2c_block_data(AK8963_SLAVE_ADDRESS, AK8963_MAGNET_OUT, 7)
-#
-#         # check overflow
-#         if (data[6] & 0x08)!=0x08:
-#             x = self.conv_data(data[0], data[1])
-#             y = self.conv_data(data[2], data[3])
-#             z = self.conv_data(data[4], data[5])
-#
-#             x = round(x * self.mres * self.magXcoef, 3)
-#             y = round(y * self.mres * self.magYcoef, 3)
-#             z = round(z * self.mres * self.magZcoef, 3)
-#
-#         return -y, -x, z
-#
-#
-#     def read_magnet(self):
-#         """ Get a sample from magntometer with correction if calibrated.
-#
-#         Returns:
-#             s (list) : The sample in uT, [x,y,z] (corrected if performed calibration).
-#         """
-#         x,y,z = self.read_magnet_raw()
-#
-#         self.x_hist.insert(0, x)
-#         self.y_hist.insert(0, y)
-#         self.z_hist.insert(0, z)
-#         if len(self.x_hist) > 2500:
-#             self.x_hist.pop()
-#             self.y_hist.pop()
-#             self.z_hist.pop()
-#         self.max_x = max(self.x_hist)
-#         self.max_y = max(self.y_hist)
-#         self.max_z = max(self.z_hist)
-#         self.min_x = min(self.x_hist)
-#         self.min_y = min(self.y_hist)
-#         self.min_z = min(self.z_hist)
-#
-#         x -= (self.max_x+self.min_x)/2
-#         y -= (self.max_y+self.min_y)/2
-#         z -= (self.max_z+self.min_z)/2
-#
-#         if len(self.x_hist) > 1:
-#             x = float((x - self.min_x) / (self.max_x - self.min_x) * 2 - 1)
-#             y = float((y - self.min_y) / (self.max_y - self.min_y) * 2 - 1)
-#             z = float((z - self.min_z) / (self.max_z - self.min_z) * 2 - 1)
-#
-#
-#         return [x, y, z]
-#
-#
-#     def get_heading(self):
-#         """ Get magnetic heading
-#
-#         Returns:
-#             heading (str) : Heading (N, NE, E, SE, S, SW, W, NW)
-#         """
-#         mag = self.read_magnet()
-#         x,y,z = self.read_accel_raw()
-#         acc = [x,y,z]
-#
-#         #Normalize accelerometer raw values.
-#         accYnorm = acc[1]/math.sqrt(acc[1] * acc[1] + acc[2] * acc[2] + acc[0] * acc[0])
-#         accZnorm = acc[2]/math.sqrt(acc[1] * acc[1] + acc[2] * acc[2] + acc[0] * acc[0])
-#
-#         #Calculate pitch and roll
-#         pitch = math.asin(accYnorm)
-#         roll = -math.asin(accZnorm/math.cos(pitch))
-#
-#         #Calculate the new tilt compensated values
-#         magYcomp = mag[1]*math.cos(pitch)+mag[0]*math.sin(pitch)
-#         magZcomp = mag[1]*math.sin(roll)*math.sin(pitch)+mag[2]*math.cos(roll)+mag[0]*math.sin(roll)*math.cos(pitch)
-#
-#         #Calculate heading
-#         heading = 180*math.atan2(magZcomp,magYcomp)/math.pi
-#
-#         #Convert heading to 0 - 360
-#         if heading < 0:
-#             heading += 360;
-#
-#
-#
-#         if(heading <= 22.5):
-#             return "N"
-#         elif(heading < 67.5):
-#             return "NE"
-#         elif(heading <= 112.5):
-#             return "E"
-#         elif(heading < 157.5):
-#             return "SE"
-#         elif(heading <= 202.5):
-#             return "S"
-#         elif(heading < 247.5):
-#             return "SW"
-#         elif(heading <= 292.5):
-#             return "W"
-#         elif(heading < 337.5):
-#             return "NW"
-#         else:
-#             return "N"
+#===============================================================================
+# Quaternion tests
+
+#-------------------------------------------------------------------------------
+# Definitions
+
+sampleFreq = 9.6	# sample frequency in Hz
+betaDef	= .1		# 2 * proportional gain
+
+#-------------------------------------------------------------------------------
+# Variable definitions
+
+beta = betaDef								# 2 * proportional gain (Kp)
+q0 = 1.0
+q1 = 0.0
+q2 = 0.0
+q3 = 0.0	# quaternion of sensor frame relative to auxiliary frame
+
+
+#-------------------------------------------------------------------------------
+# AHRS algorithm update
+
+def MadgwickAHRSupdate(gx, gy, gz, ax, ay, az, mx, my, mz):
+    global q0, q1, q2, q3
+
+	# Use IMU algorithm if magnetometer measurement invalid (avoids NaN in magnetometer normalisation)
+    if (mx == 0.0) and (my == 0.0) and (mz == 0.0):
+        MadgwickAHRSupdateIMU(gx, gy, gz, ax, ay, az)
+        return
+
+
+    # Rate of change of quaternion from gyroscope
+    qDot1 = 0.5 * (-q1 * gx - q2 * gy - q3 * gz)
+    qDot2 = 0.5 * (q0 * gx + q2 * gz - q3 * gy)
+    qDot3 = 0.5 * (q0 * gy - q1 * gz + q3 * gx)
+    qDot4 = 0.5 * (q0 * gz + q1 * gy - q2 * gx)
+
+    # Compute feedback only if accelerometer measurement valid (avoids NaN in accelerometer normalisation)
+    if not ((ax == 0.0) and (ay == 0.0) and (az == 0.0)):
+
+        # Normalise accelerometer measurement
+        recipNorm = invSqrt(ax * ax + ay * ay + az * az)
+        ax *= recipNorm
+        ay *= recipNorm
+        az *= recipNorm
+
+        # Normalise magnetometer measurement
+        recipNorm = invSqrt(mx * mx + my * my + mz * mz)
+        mx *= recipNorm
+        my *= recipNorm
+        mz *= recipNorm
+
+		# Auxiliary variables to avoid repeated arithmetic
+        _2q0mx = 2.0 * q0 * mx
+        _2q0my = 2.0 * q0 * my
+        _2q0mz = 2.0 * q0 * mz
+        _2q1mx = 2.0 * q1 * mx
+        _2q0 = 2.0 * q0
+        _2q1 = 2.0 * q1
+        _2q2 = 2.0 * q2
+        _2q3 = 2.0 * q3
+        _2q0q2 = 2.0 * q0 * q2
+        _2q2q3 = 2.0 * q2 * q3
+        q0q0 = q0 * q0
+        q0q1 = q0 * q1
+        q0q2 = q0 * q2
+        q0q3 = q0 * q3
+        q1q1 = q1 * q1
+        q1q2 = q1 * q2
+        q1q3 = q1 * q3
+        q2q2 = q2 * q2
+        q2q3 = q2 * q3
+        q3q3 = q3 * q3
+
+		# Reference direction of Earth's magnetic field
+        hx = mx * q0q0 - _2q0my * q3 + _2q0mz * q2 + mx * q1q1 + _2q1 * my * q2 + _2q1 * mz * q3 - mx * q2q2 - mx * q3q3
+        hy = _2q0mx * q3 + my * q0q0 - _2q0mz * q1 + _2q1mx * q2 - my * q1q1 + my * q2q2 + _2q2 * mz * q3 - my * q3q3
+        _2bx = math.sqrt(hx * hx + hy * hy)
+        _2bz = -_2q0mx * q2 + _2q0my * q1 + mz * q0q0 + _2q1mx * q3 - mz * q1q1 + _2q2 * my * q3 - mz * q2q2 + mz * q3q3
+        _4bx = 2.0 * _2bx
+        _4bz = 2.0 * _2bz
+
+		# Gradient decent algorithm corrective step
+        s0 = -_2q2 * (2.0 * q1q3 - _2q0q2 - ax) + _2q1 * (2.0 * q0q1 + _2q2q3 - ay) - _2bz * q2 * (_2bx * (0.5 - q2q2 - q3q3) + _2bz * (q1q3 - q0q2) - mx) + (-_2bx * q3 + _2bz * q1) * (_2bx * (q1q2 - q0q3) + _2bz * (q0q1 + q2q3) - my) + _2bx * q2 * (_2bx * (q0q2 + q1q3) + _2bz * (0.5 - q1q1 - q2q2) - mz)
+        s1 = _2q3 * (2.0 * q1q3 - _2q0q2 - ax) + _2q0 * (2.0 * q0q1 + _2q2q3 - ay) - 4.0 * q1 * (1 - 2.0 * q1q1 - 2.0 * q2q2 - az) + _2bz * q3 * (_2bx * (0.5 - q2q2 - q3q3) + _2bz * (q1q3 - q0q2) - mx) + (_2bx * q2 + _2bz * q0) * (_2bx * (q1q2 - q0q3) + _2bz * (q0q1 + q2q3) - my) + (_2bx * q3 - _4bz * q1) * (_2bx * (q0q2 + q1q3) + _2bz * (0.5 - q1q1 - q2q2) - mz)
+        s2 = -_2q0 * (2.0 * q1q3 - _2q0q2 - ax) + _2q3 * (2.0 * q0q1 + _2q2q3 - ay) - 4.0 * q2 * (1 - 2.0 * q1q1 - 2.0 * q2q2 - az) + (-_4bx * q2 - _2bz * q0) * (_2bx * (0.5 - q2q2 - q3q3) + _2bz * (q1q3 - q0q2) - mx) + (_2bx * q1 + _2bz * q3) * (_2bx * (q1q2 - q0q3) + _2bz * (q0q1 + q2q3) - my) + (_2bx * q0 - _4bz * q2) * (_2bx * (q0q2 + q1q3) + _2bz * (0.5 - q1q1 - q2q2) - mz)
+        s3 = _2q1 * (2.0 * q1q3 - _2q0q2 - ax) + _2q2 * (2.0 * q0q1 + _2q2q3 - ay) + (-_4bx * q3 + _2bz * q1) * (_2bx * (0.5 - q2q2 - q3q3) + _2bz * (q1q3 - q0q2) - mx) + (-_2bx * q0 + _2bz * q2) * (_2bx * (q1q2 - q0q3) + _2bz * (q0q1 + q2q3) - my) + _2bx * q1 * (_2bx * (q0q2 + q1q3) + _2bz * (0.5 - q1q1 - q2q2) - mz)
+        recipNorm = invSqrt(s0 * s0 + s1 * s1 + s2 * s2 + s3 * s3) # normalise step magnitude
+        s0 *= recipNorm
+        s1 *= recipNorm
+        s2 *= recipNorm
+        s3 *= recipNorm
+
+		# Apply feedback step
+        qDot1 -= beta * s0
+        qDot2 -= beta * s1
+        qDot3 -= beta * s2
+        qDot4 -= beta * s3
+
+
+	# Integrate rate of change of quaternion to yield quaternion
+    q0 += qDot1 * (1.0 / sampleFreq)
+    q1 += qDot2 * (1.0 / sampleFreq)
+    q2 += qDot3 * (1.0 / sampleFreq)
+    q3 += qDot4 * (1.0 / sampleFreq)
+
+	# Normalise quaternion
+    recipNorm = invSqrt(q0 * q0 + q1 * q1 + q2 * q2 + q3 * q3)
+    q0 *= recipNorm
+    q1 *= recipNorm
+    q2 *= recipNorm
+    q3 *= recipNorm
+
+
+def invSqrt(number):
+    threehalfs = 1.5
+    x2 = number * 0.5
+    y = np.float32(number)
+
+    i = y.view(np.int32)
+    i = np.int32(0x5f3759df) - np.int32(i >> 1)
+    y = i.view(np.float32)
+
+    y = y * (threehalfs - (x2 * y * y))
+    return float(y)
+
+def toEulerAngle(q0, q1, q2, q3):
+	#roll (x-axis rotation)
+    sinr_cosp = 2.0 * (q0 * q1 + q2 * q3)
+    cosr_cosp = 1.0 - 2.0 * (q1 * q1 + q2 * q2)
+    roll = math.atan2(sinr_cosp, cosr_cosp)
+
+	# pitch (y-axis rotation)
+    sinp = 2.0 * (q0 * q2 - q3 * q1)
+    if abs(sinp) >= 1:
+        pitch = math.copysign(math.pi / 2, sinp) # use 90 degrees if out of range
+    else:
+        pitch = math.asin(sinp)
+
+	# yaw (z-axis rotation)
+    siny_cosp = 2.0 * (q0 * q3 + q1 * q2)
+    cosy_cosp = 1.0 - 2.0 * (q2 * q2 + q3 * q3)
+    yaw = math.atan2(siny_cosp, cosy_cosp)
+
+    return pitch, roll, yaw
+
+#===============================================================================
 
 m = MPU9250()
 m.calibrate()
-while True:
-    print(m.get_heading())
+timestart = time.perf_counter()
+count=0
+xt,yt,zt=0,0,0
 
-    time.sleep(1)
+while True:
+    # print(time.perf_counter()-timestart)
+    # timestart = time.perf_counter()
+    #print(m.read_accel_raw())
+    # x,y,z=m.read_gyro_raw()
+    # xt+=x
+    # yt+=y
+    # zt+=z
+    # count+=1
+    # print('x:',xt/count)
+    # print('y:',yt/count)
+    # print('z:',zt/count)
+
+    #print(m.read_gyro_raw())
+    #print(m.read_magnet())
+    print(m.get_heading())
+    #print()
+
+    # ax,ay,az = m.read_accel_raw()
+    # gx,gy,gz = m.read_gyro_raw()
+    # mx,my,mz = m.read_magnet_raw()
+    # MadgwickAHRSupdate(gx, gy, gz, ax, ay, az, mx, my, mz)
+    # pitch, roll, yaw = toEulerAngle(q0, q1, q2, q3)
+    # # print(q0)
+    # # print(q1)
+    # # print(q2)
+    # # print(q3)
+    # print(pitch)
+    # print(roll)
+    # print(yaw)
+    # print()
+
+
+    time.sleep(.01)
