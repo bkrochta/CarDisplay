@@ -14,6 +14,12 @@ AK8963_SLAVE_ADDRESS = 0x0C
 DEVICE_ID            = 0x71
 
 ''' MPU-9250 Register Addresses '''
+XG_OFFSET_H    = 0x13  /#/ User-defined trim values for gyroscope
+XG_OFFSET_L    = 0x14
+YG_OFFSET_H    = 0x15
+YG_OFFSET_L    = 0x16
+ZG_OFFSET_H    = 0x17
+ZG_OFFSET_L    = 0x18
 ## sample rate driver
 SMPLRT_DIV     = 0x19
 CONFIG         = 0x1A
@@ -22,6 +28,7 @@ ACCEL_CONFIG   = 0x1C
 ACCEL_CONFIG_2 = 0x1D
 LP_ACCEL_ODR   = 0x1E
 WOM_THR        = 0x1F
+
 FIFO_EN        = 0x23
 I2C_MST_CTRL   = 0x24
 I2C_MST_STATUS = 0x36
@@ -31,6 +38,15 @@ INT_STATUS     = 0x3A
 ACCEL_OUT      = 0x3B
 TEMP_OUT       = 0x41
 GYRO_OUT       = 0x43
+FIFO_COUNTH    = 0x72
+FIFO_COUNTL    = 0x73
+FIFO_R_W       = 0x74
+XA_OFFSET_H    = 0x77
+XA_OFFSET_L    = 0x78
+YA_OFFSET_H    = 0x7A
+YA_OFFSET_L    = 0x7B
+ZA_OFFSET_H    = 0x7D
+ZA_OFFSET_L    = 0x7E
 
 I2C_MST_DELAY_CTRL = 0x67
 SIGNAL_PATH_RESET  = 0x68
@@ -91,6 +107,8 @@ class MPU9250:
         self.config(GFS_250, AFS_2G, AK8963_BIT_16, AK8963_MODE_C100HZ)
 
         # initialize values
+        self.accel_bias = [0,0,0]
+        self.gyro_bias = [0,0,0]
         self.mag_bias = [0,0,0]
         self.mag_scale = [0,0,0]
 
@@ -178,43 +196,35 @@ class MPU9250:
         time.sleep(0.1)
 
     def read_accel_raw(self):
-        """ Read accelerometer
+        """ Read accelerometer raw data
         Returns:
-            x, y, x (float float float) : g
+            x, y, x (float float float) : in raw format
         """
         data = self.bus.read_i2c_block_data(self.address, ACCEL_OUT, 6)
 
-        x = self.conv_data(data[1], data[0])
-        y = self.conv_data(data[3], data[2])
-        z = self.conv_data(data[5], data[4])
-
-        x = round(x*self.ares, 3)
-        y = round(y*self.ares, 3)
-        z = round(z*self.ares, 3)
+        x = self.__conv_data(data[0], data[1])
+        y = self.__conv_data(data[2], data[3])
+        z = self.__conv_data(data[4], data[5])
 
         return x, y, z
 
     def read_gyro_raw(self):
-        """ Read gyroscope
+        """ Read gyroscope raw data
         Returns:
-            x, y, z : (float float float) : rad/sec
+            x, y, z : (float float float) : in raw format
         """
         data = self.bus.read_i2c_block_data(self.address, GYRO_OUT, 6)
 
-        x = self.conv_data(data[1], data[0])
-        y = self.conv_data(data[3], data[2])
-        z = self.conv_data(data[5], data[4])
-
-        x = round(x*self.gres, 3)#-3.262
-        y = round(y*self.gres, 3)#+.03
-        z = round(z*self.gres, 3)#+.604
+        x = self.__conv_data(data[0], data[1])
+        y = self.__conv_data(data[2], data[3])
+        z = self.__conv_data(data[4], data[5])
 
         return x, y, z
 
     def read_magnet_raw(self):
-        """ Read magnetometer
+        """ Read magnetometer raw data
         Returns:
-            x, y, z (float float float) : in uT
+            x, y, z (float float float) : in raw format
         """
         # wait until data ready and no overflow
         while self.bus.read_byte_data(AK8963_SLAVE_ADDRESS, AK8963_ST1) == 0x00:
@@ -225,31 +235,54 @@ class MPU9250:
 
         # check overflow
         if (data[6] & 0x08)!=0x08:
-            x = self.conv_data(data[0], data[1])
-            y = self.conv_data(data[2], data[3])
-            z = self.conv_data(data[4], data[5])
+            x = self.__conv_data(data[0], data[1])
+            y = self.__conv_data(data[2], data[3])
+            z = self.__conv_data(data[4], data[5])
 
-            x = round(x * self.mres * self.magXcoef, 3)
-            y = round(y * self.mres * self.magYcoef, 3)
-            z = round(z * self.mres * self.magZcoef, 3)
-
-            return y, x, -z
+            return x, y, z
         else: # overflow
-            return 0,0,0
+            return 0, 0, 0
 
-    def conv_data(self, data1, data2):
-        """ Convert raw binary data to float
-        Args:
-            data1 (bits): LSB
-            data2 (bits): MSB
+    def read_temp_raw(self):
+        """ Read temperature raw data
         Returns:
-            int16bit: MSB+LSB
+            t (float) : temperature in C
         """
-        value = data1 | (data2 << 8)
-        if(value & (1 << 16 - 1)):
-            value -= (1<<16)
-        return value
+        data = self.bus.read_i2c_block_data(self.address, TEMP_OUT, 2)
 
+        temp = self.__conv_data(data[0],data[1])
+
+        return temp
+
+    def read_accel(self):
+        """ Get a sample from accelerometer with correction if calibrated.
+        Returns:
+            s (list) : The sample in g, [x,y,z] (corrected if performed calibration).
+        """
+        x,y,z = self.read_accel_raw()
+
+        x = round(x*self.ares, 3)
+        y = round(y*self.ares, 3)
+        z = round(z*self.ares, 3)
+
+        return [x, y, z]
+
+    def read_gyro(self):
+        """ Get a sample from gyroscope with correction if calibrated.
+        Returns:
+            s (list) : The sample in deg/sec, [x,y,z] (corrected if performed calibration).
+        """
+        x,y,z = self.read_gyro_raw()
+        '''
+        x -= self.gyro_bias[0]
+        y -= self.gyro_bias[1]
+        z -= self.gyro_bias[2]
+        '''
+        x = round(x*self.gres, 3)#-3.262
+        y = round(y*self.gres, 3)#+.03
+        z = round(z*self.gres, 3)#+.604
+
+        return [x, y, z]
 
     def read_magnet(self):
         """ Get a sample from magntometer with correction if calibrated.
@@ -257,6 +290,7 @@ class MPU9250:
             s (list) : The sample in uT, [x,y,z] (corrected if performed calibration).
         """
         x,y,z = self.read_magnet_raw()
+
         x -= self.mag_bias[0]
         y -= self.mag_bias[1]
         z -= self.mag_bias[2]
@@ -265,14 +299,213 @@ class MPU9250:
         y *= self.mag_scale[1]
         z *= self.mag_scale[2]
 
-        return [x, y, z]
 
-    def calibrate(self):
+        x = round(x * self.mres * self.magXcoef, 3)
+        y = round(y * self.mres * self.magYcoef, 3)
+        z = round(z * self.mres * self.magZcoef, 3)
+
+        return [y, x, -z]   # to match gyro and accel axes
+
+    def calibrate_accel_gyro(self):
+        # Write a one to bit 7 reset bit; toggle reset device
+        self.bus.write_byte_data(self.address, PWR_MGMT_1, 0x80)
+        time.sleep(.1)
+
+        # get stable time source; Auto select clock source to be PLL gyroscope
+        # reference if ready else use the internal oscillator, bits 2:0 = 001
+        self.bus.write_byte_data(self.address, PWR_MGMT_1, 0x01)
+        self.bus.write_byte_data(self.address, PWR_MGMT_2, 0x00)
+        time.sleep(.1)
+
+        # Configure device for bias calculation
+        # Disable all interrupts
+        self.bus.write_byte_data(self.address, INT_ENABLE, 0x00)
+        # Disable FIFO
+        self.bus.write_byte_data(self.address, FIFO_EN, 0x00)
+        # Turn on internal clock source
+        self.bus.write_byte_data(self.address, PWR_MGMT_1, 0x00)
+        # Disable I2C master
+        self.bus.write_byte_data(self.address, I2C_MST_CTRL, 0x00)
+        # Disable FIFO and I2C master modes
+        self.bus.write_byte_data(self.address, USER_CTRL, 0x00)
+        # Reset FIFO and DMP
+        self.bus.write_byte_data(self.address, USER_CTRL, 0x0C)
+        time.sleep(.015)
+
+        # Configure MPU6050 gyro and accelerometer for bias calculation
+        # Set low-pass filter to 188 Hz
+        self.bus.write_byte_data(self.address, CONFIG, 0x01);
+        # Set sample rate to 1 kHz
+        self.bus.write_byte_data(self.address, SMPLRT_DIV, 0x00);
+        # Set gyro full-scale to 250 degrees per second, maximum sensitivity
+        self.bus.write_byte_data(self.address, GYRO_CONFIG, 0x00);
+        # Set accelerometer full-scale to 2 g, maximum sensitivity
+        self.bus.write_byte_data(self.address, ACCEL_CONFIG, 0x00);
+
+        gyrosensitivity  = 131;   # = 131 LSB/degrees/sec
+        accelsensitivity = 16384; # = 16384 LSB/g
+
+        # Configure FIFO to capture accelerometer and gyro data for bias calculation
+        self.bus.write_byte_data(self.address, USER_CTRL, 0x40);  # Enable FIFO
+        # Enable gyro and accelerometer sensors for FIFO  (max size 512 bytes in
+        # MPU-9150)
+        self.bus.write_byte_data(self.address, FIFO_EN, 0x78);
+        time.sleep(0.040);  # accumulate 40 samples in 40 milliseconds = 480 bytes
+
+        # At end of sample accumulation, turn off FIFO sensor read
+        # Disable gyro and accelerometer sensors for FIFO
+        self.bus.write_byte_data(self.address, FIFO_EN, 0x00);
+        # Read FIFO sample count
+        data = self.bus.read_i2c_block_data(self.address, FIFO_COUNTH, 2)
+        fifo_count = self.__conv_data(data[0],data[1])
+        # How many sets of full gyro and accelerometer data for averaging
+        packet_count = fifo_count/12;
+        for ii in range(packet_count):
+            accel_temp = [0, 0, 0]
+            gyro_temp = [0, 0, 0]
+            # Read data for averaging
+            data = self.bus.read_i2c_block_data(self.address, FIFO_R_W, 12)
+            # Form signed 16-bit integer for each sample in FIFO
+            accel_temp[0] = self.__conv_data(data[0],data[1])
+            accel_temp[1] = self.__conv_data(data[2],data[3])
+            accel_temp[2] = self.__conv_data(data[4],data[5])
+            gyro_temp[0]  = self.__conv_data(data[6],data[7])
+            gyro_temp[1]  = self.__conv_data(data[8],data[9])
+            gyro_temp[2]  = self.__conv_data(data[10],data[11])
+
+            # Sum individual signed 16-bit biases to get accumulated signed 32-bit
+            # biases.
+            self.accel_bias[0] += accel_temp[0]
+            self.accel_bias[1] += accel_temp[1]
+            self.accel_bias[2] += accel_temp[2]
+            self.gyro_bias[0]  += gyro_temp[0]
+            self.gyro_bias[1]  += gyro_temp[1]
+            self.gyro_bias[2]  += gyro_temp[2]
+
+        # Sum individual signed 16-bit biases to get accumulated signed 32-bit biases
+        self.accel_bias[0] /= packet_count
+        self.accel_bias[1] /= packet_count
+        self.accel_bias[2] /= packet_count
+        self.gyro_bias[0]  /= packet_count
+        self.gyro_bias[1]  /= packet_count
+        self.gyro_bias[2]  /= packet_count
+
+        # Sum individual signed 16-bit biases to get accumulated signed 32-bit biases
+        # if accel_bias[2] > 0:
+        #     accel_bias[2] -= accelsensitivity
+        #
+        # else:
+        #     accel_bias[2] += accelsensitivity
+
+        # Construct the gyro biases for push to the hardware gyro bias registers,
+        # which are reset to zero upon device startup.
+        # Divide by 4 to get 32.9 LSB per deg/s to conform to expected bias input
+        # format.
+        data[0] = (-self.gyro_bias[0]/4  >> 8) & 0xFF
+        # Biases are additive, so change sign on calculated average gyro biases
+        data[1] = (-self.gyro_bias[0]/4)       & 0xFF
+        data[2] = (-self.gyro_bias[1]/4  >> 8) & 0xFF
+        data[3] = (-self.gyro_bias[1]/4)       & 0xFF
+        data[4] = (-self.gyro_bias[2]/4  >> 8) & 0xFF
+        data[5] = (-self.gyro_bias[2]/4)       & 0xFF
+
+        # Push gyro biases to hardware registers
+        # self.bus.write_byte_data(self.address, XG_OFFSET_H, data[0])
+        # self.bus.write_byte_data(self.address, XG_OFFSET_L, data[1])
+        # self.bus.write_byte_data(self.address, YG_OFFSET_H, data[2])
+        # self.bus.write_byte_data(self.address, YG_OFFSET_L, data[3])
+        # self.bus.write_byte_data(self.address, ZG_OFFSET_H, data[4])
+        # self.bus.write_byte_data(self.address, ZG_OFFSET_L, data[5])
+
+        # Output scaled gyro biases for display in the main program
+        gyroBias[0] = gyro_bias[0] / gyrosensitivity
+        gyroBias[1] = gyro_bias[1] / gyrosensitivity
+        gyroBias[2] = gyro_bias[2] / gyrosensitivity
+
+        # Construct the accelerometer biases for push to the hardware accelerometer
+        # bias registers. These registers contain factory trim values which must be
+        # added to the calculated accelerometer biases; on boot up these registers
+        # will hold non-zero values. In addition, bit 0 of the lower byte must be
+        # preserved since it is used for temperature compensation calculations.
+        # Accelerometer bias registers expect bias input as 2048 LSB per g, so that
+        # the accelerometer biases calculated above must be divided by 8.
+
+        # A place to hold the factory accelerometer trim biases
+        accel_bias_reg = [0, 0, 0];
+        # Read factory accelerometer trim values
+        data = self.bus.read_i2c_block_data(self.address, XA_OFFSET_H, 2)
+        accel_bias_reg[0] = self.__conv_data(data[0],data[1])
+        data = self.bus.read_i2c_block_data(self.address, YA_OFFSET_H, 2)
+        accel_bias_reg[1] = self.__conv_data(data[0],data[1])
+        data = self.bus.read_i2c_block_data(self.address, ZA_OFFSET_H, 2)
+        accel_bias_reg[2] = self.__conv_data(data[0],data[1])
+
+        # Define mask for temperature compensation bit 0 of lower byte of
+        # accelerometer bias registers
+        mask = 1
+        # Define array to hold mask bit for each accelerometer bias axis
+        mask_bit = [0, 0, 0]
+
+        for ii in range(3):
+            # If temperature compensation bit is set, record that fact in mask_bit
+            if ((accel_bias_reg[ii] & mask)):
+                mask_bit[ii] = 0x01;
+
+        # Construct total accelerometer bias, including calculated average
+        # accelerometer bias from above
+        # Subtract calculated averaged accelerometer bias scaled to 2048 LSB/g
+        # (16 g full scale)
+        accel_bias_reg[0] -= (accel_bias[0]/8);
+        accel_bias_reg[1] -= (accel_bias[1]/8);
+        accel_bias_reg[2] -= (accel_bias[2]/8);
+
+        data[0] = (accel_bias_reg[0] >> 8) & 0xFF;
+        data[1] = (accel_bias_reg[0])      & 0xFF;
+        # preserve temperature compensation bit when writing back to accelerometer
+        # bias registers
+        data[1] = data[1] | mask_bit[0];
+        data[2] = (accel_bias_reg[1] >> 8) & 0xFF;
+        data[3] = (accel_bias_reg[1])      & 0xFF;
+        # Preserve temperature compensation bit when writing back to accelerometer
+        # bias registers
+        data[3] = data[3] | mask_bit[1];
+        data[4] = (accel_bias_reg[2] >> 8) & 0xFF;
+        data[5] = (accel_bias_reg[2])      & 0xFF;
+        # Preserve temperature compensation bit when writing back to accelerometer
+        # bias registers
+        data[5] = data[5] | mask_bit[2];
+
+        # Apparently this is not working for the acceleration biases in the MPU-9250
+        # Are we handling the temperature correction bit properly?
+        # Push accelerometer biases to hardware registers
+        # self.bus.write_byte_data(self.address, XA_OFFSET_H, data[0]);
+        # self.bus.write_byte_data(self.address, XA_OFFSET_L, data[1]);
+        # self.bus.write_byte_data(self.address, YA_OFFSET_H, data[2]);
+        # self.bus.write_byte_data(self.address, YA_OFFSET_L, data[3]);
+        # self.bus.write_byte_data(self.address, ZA_OFFSET_H, data[4]);
+        # self.bus.write_byte_data(self.address, ZA_OFFSET_L, data[5]);
+
+        # Output scaled accelerometer biases for display in the main program
+        accelBias[0] = (float)accel_bias[0]/(float)accelsensitivity;
+        accelBias[1] = (float)accel_bias[1]/(float)accelsensitivity;
+        accelBias[2] = (float)accel_bias[2]/(float)accelsensitivity;
+
+        self.config(GFS_250, AFS_2G, AK8963_BIT_16, AK8963_MODE_C100HZ)
+
+
+
+        return None
+
+    def calibrate_magnet(self):
         """ Calibrates magnetometer. Updates mag_bias and mag_scale.
         Returns:
             void
         """
-        print('Collecting samples (Ctrl-C to stop and perform calibration)')
+        print("Starting magenetometer calibration in 5 seconds... (Ctrl-C to stop and perform calibration)")
+        print('(Press Ctrl-C to stop and perform calibration)')
+        time.sleep(5)
+
+        print('Collecting samples...')
         try:
             s = []
             n = 0
@@ -310,19 +543,15 @@ class MPU9250:
         self.mag_bias[1]  = (max_y + min_y)/2;  # get average y mag bias in counts
         self.mag_bias[2]  = (max_z + min_z)/2;  # get average z mag bias in counts
 
-        self.mag_scale[0]  = (max_x - min_x) / 2;
-        # Get average y axis max chord length in counts
-        self.mag_scale[1]  = (max_y - min_y) / 2;
-        # Get average z axis max chord length in counts
-        self.mag_scale[2]  = (max_z - min_z) / 2;
+        # Get average axis max chord length in counts
+        scale = [(max_x - min_x) / 2, (max_y - min_y) / 2, (max_z - min_z) / 2]
 
-        avg_rad = self.mag_scale[0] + self.mag_scale[1] + self.mag_scale[2];
-        avg_rad /= 3.0;
+        avg_len = scale[0] + scale[1] + scale[2];
+        avg_len /= 3.0;
 
-        self.mag_scale[0] = avg_rad / (float(self.mag_scale[0]));
-        self.mag_scale[1] = avg_rad / (float(self.mag_scale[1]));
-        self.mag_scale[2] = avg_rad / (float(self.mag_scale[2]));
-
+        self.mag_scale[0] = avg_len / (float(scale[0]));
+        self.mag_scale[1] = avg_len / (float(scale[1]));
+        self.mag_scale[2] = avg_len / (float(scale[2]));
 
     def get_heading(self):
         """ Get magnetic heading
@@ -376,6 +605,19 @@ class MPU9250:
             return "NW"
         else:
             return "N"
+
+    def __conv_data(self, data1, data2):
+        """ Convert raw binary data to float
+        Args:
+            data1 (bits): LSB
+            data2 (bits): MSB
+        Returns:
+            int16bit: MSB+LSB
+        """
+        value = data1 | (data2 << 8)
+        if(value & (1 << 16 - 1)):
+            value -= (1<<16)
+        return value
 
 
 #===============================================================================
@@ -491,7 +733,6 @@ def MadgwickAHRSupdate(gx, gy, gz, ax, ay, az, mx, my, mz):
     q2 *= recipNorm
     q3 *= recipNorm
 
-
 def invSqrt(number):
     threehalfs = 1.5
     x2 = number * 0.5
@@ -527,15 +768,21 @@ def toEulerAngle(q0, q1, q2, q3):
 #===============================================================================
 
 m = MPU9250()
-m.calibrate()
+m.calibrate_accel_gyro()
+
 timestart = time.perf_counter()
 count=0
 xt,yt,zt=0,0,0
 
 while True:
+    print(self.gyro_bias)
+    print(self.accel_bias)
+    print(m.read_gyro())
+    print(m.read_accel())
+    print()
     # print(time.perf_counter()-timestart)
     # timestart = time.perf_counter()
-    #print(m.read_accel_raw())
+    print(m.read_accel_raw())
     # x,y,z=m.read_gyro_raw()
     # xt+=x
     # yt+=y
@@ -545,9 +792,10 @@ while True:
     # print('y:',yt/count)
     # print('z:',zt/count)
 
-    #print(m.read_gyro_raw())
+    print(m.read_gyro_raw())
+    print('\n')
     #print(m.read_magnet())
-    print(m.get_heading())
+    #print(m.get_heading())
     #print()
 
     # ax,ay,az = m.read_accel_raw()
