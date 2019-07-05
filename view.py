@@ -5,6 +5,7 @@ import tkinter
 import threading
 import datetime
 import math
+import mpu9250
 
 # Thermometer addresses
 OUT_THERM_ADDR = '28-0315977942f6'
@@ -65,15 +66,22 @@ def __gps_thread():
         time.sleep(1)
 
 
-# def __mpu_thread():
-#     global direction
-#     global speed
-#
-#     mpu = mpu9250.MPU9250()
-#     #mpu.calibrate()
-#     while quit == 0:
-#         direction = mpu.get_heading()
-#         time.sleep(0.100)
+def __mpu_thread():
+    global direction
+    global speed
+
+    mpu = mpu9250.MPU9250()
+    count = 0
+    #mpu.calibrate()
+    while quit == 0:
+        if not (count % 100):
+            direction = mpu.get_heading()
+        if not bad_speed:
+            accel = mpu.read_accel()
+            #print(x)
+            speed = speed + (accel[1] * .01 *9.8*2.237)
+        time.sleep(0.010)
+        count+=1
 
 def __quit(e):
     global quit
@@ -125,12 +133,12 @@ dt_label.place(relx=0.2, rely=0.79, relheight=0.05, relwidth=0.16)
 
 # create threads for sensors
 out_therm_thread = threading.Thread(target=__out_temp_thread)
-#mpu_thread = threading.Thread(target=__mpu_thread)
+mpu_thread = threading.Thread(target=__mpu_thread)
 gps_thread = threading.Thread(target=__gps_thread)
 
 # start threads
 out_therm_thread.start()
-#mpu_thread.start()
+mpu_thread.start()
 gps_thread.start()
 
 # MAIN LOOP #
@@ -145,4 +153,4 @@ while True:
 
     root.update_idletasks()
     root.update()
-    time.sleep(0.250)
+    time.sleep(0.100)
