@@ -49,13 +49,12 @@ class GPS:
         year = split[0]
         month = split[1]
         day = split[2][:2]
-        tim = t.split("T")[1][:8]
+        tim = t.split("T")[1][:8].split(':')
 
-        gmt = pytz.timezone('GMT')
+        utc = pytz.utc
         eastern = pytz.timezone('US/Eastern')
-        d = datetime.strptime(day + "/" + month + "/" + year + " " + tim + " GMT", '%d/%m/%Y %H:%M:%S GMT')
-        dategmt = gmt.localize(d)
-        dateeast = dategmt.astimezone(eastern)
+        d = datetime(year, month, day, tim[0], tim[1], tim[2], tzinfo=utc)
+        dateeast = d.astimezone(eastern)
         split = str(dateeast).split(" ")
         os.system("sudo date +%D -s " + split[0])
         os.system("sudo date +%T -s " + split[1][:-6])
