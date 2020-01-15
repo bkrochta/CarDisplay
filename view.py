@@ -1,5 +1,6 @@
 import gps
 import thermometer
+import car
 import time
 import tkinter
 import threading
@@ -42,29 +43,28 @@ def __out_temp_thread():
 
 
 def __gps_thread():
-    global speed
-    global avg_speed
-    global dst_traveled
     global time_updated
-    global bad_speed
 
     g = gps.GPS()
     g.update_time()
     time_updated = True
-    while quit == 0:
-        s = g.get_speed()
-        if s != None:
-            speed = math.floor(s)
-            bad_speed = False
-        else:
-            bad_speed = True
-        # direction = g.get_heading()
-        # if direction == None:
-        #     direction = '--'
-        avg_speed = int(g.get_average_speed())
-        dst_traveled = math.floor(g.get_distance_traveled())
-        time.sleep(1)
+    g.gps_thread.stop()
 
+def __car_thread():
+    global speed
+    global avg_speed
+    global dst_traveled
+    global bad_speed
+
+    c = car.Car()
+    while quit == 0:
+        speed = round(c.get_speed())
+        bad_speed = False
+        avg_speed = round(c.get_average_speed())
+        dst_traveled = round(c.get_distance_traveled())
+        time.sleep(.1)
+    
+    c.connection.stop()
 
 def __mpu_thread():
     global direction
@@ -79,7 +79,7 @@ def __mpu_thread():
         if not bad_speed:
             accel = mpu.read_accel()
             #print(x)
-            speed = speed + (accel[1] * .01 *9.8*2.237)
+            # speed = speed + (accel[1] * .01 *9.8*2.237)
         time.sleep(0.010)
         count+=1
 
@@ -135,11 +135,13 @@ dt_label.place(relx=0.2, rely=0.79, relheight=0.05, relwidth=0.16)
 out_therm_thread = threading.Thread(target=__out_temp_thread)
 mpu_thread = threading.Thread(target=__mpu_thread)
 gps_thread = threading.Thread(target=__gps_thread)
+car_thread = threading.Thread(target=__car_thread)
 
 # start threads
 out_therm_thread.start()
 mpu_thread.start()
 gps_thread.start()
+car_thread.start()
 
 # MAIN LOOP #
 while True:
