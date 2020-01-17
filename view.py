@@ -61,7 +61,7 @@ def __car_thread():
         speed = round(c.get_speed())
         bad_speed = False
         avg_speed = round(c.get_average_speed())
-        dst_traveled = round(c.get_distance_traveled())
+        #dst_traveled = math.floor(c.get_distance_traveled())
         time.sleep(.1)
     
     c.connection.stop()

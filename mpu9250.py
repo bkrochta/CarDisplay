@@ -109,11 +109,9 @@ class MPU9250:
         self.mag_bias = [0,0,0]
         self.mag_scale = [0,0,0]
         if not calibrate:
-            with open("calibration_data") as f:
+            with open("/home/pi/CarDisplay/calibration_data") as f:
                 data = f.read()
                 self.mag_scale[0], self.mag_scale[1], self.mag_scale[2], self.mag_bias[0], self.mag_bias[1], self.mag_bias[2] = map(float,data.split(","))
-                print(self.mag_scale)
-                print(self.mag_bias)
         else:
 
             self.calibrate_magnet()
@@ -531,7 +529,7 @@ class MPU9250:
                 n += 1
                 sys.stdout.write('\rTotal: %d' % n)
                 sys.stdout.flush()
-                time.sleep(0.01)
+                time.sleep(.5)
         except KeyboardInterrupt:
             pass
 
@@ -569,10 +567,8 @@ class MPU9250:
         self.mag_scale[0] = avg_len / (float(scale[0]));
         self.mag_scale[1] = avg_len / (float(scale[1]));
         self.mag_scale[2] = avg_len / (float(scale[2]));
-        print(self.mag_scale)
-        print(self.mag_bias)
 
-        with open("calibration_data", 'w') as f:
+        with open("/home/pi/CarDisplay/calibration_data", 'w') as f:
             f.write('%f,%f,%f,%f,%f,%f\n' % (self.mag_scale[0], self.mag_scale[1], self.mag_scale[2], self.mag_bias[0], self.mag_bias[1], self.mag_bias[2]))
 
 
@@ -789,7 +785,7 @@ def toEulerAngle(q0, q1, q2, q3):
     return pitch, roll, yaw
 
 #===============================================================================
-
+'''
 m = MPU9250(False)
 m.calibrate_magnet()
 
@@ -810,7 +806,7 @@ while True:
     # print(m.gyro_bias)
     # print(m.accel_bias)
     #print(m.read_gyro())
-    #print(m.read_accel())
+    print(m.read_accel())
     # print()
     # print(time.perf_counter()-timestart)
     # timestart = time.perf_counter()
@@ -827,7 +823,7 @@ while True:
     #print(m.read_gyro_raw())
     #print('\n')
     #print(m.read_magnet())
-    print(m.get_heading())
+    #print(m.get_heading())
     #print()
 
     # accel = m.read_accel_raw()
@@ -846,3 +842,4 @@ while True:
 
 
     time.sleep(.01)
+'''

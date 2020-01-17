@@ -39,6 +39,7 @@ class GPS:
             return "N"
 
     def update_time(self):
+        print("start")
         """ Sets system clock with time from gps """
         while True:
             t = self.gps_thread.data_stream.time
@@ -53,8 +54,9 @@ class GPS:
 
         utc = pytz.utc
         eastern = pytz.timezone('US/Eastern')
-        d = datetime(year, month, day, tim[0], tim[1], tim[2], tzinfo=utc)
+        d = datetime(int(year), int(month), int(day), int(tim[0]), int(tim[1]), int(tim[2]), tzinfo=utc)
         dateeast = d.astimezone(eastern)
         split = str(dateeast).split(" ")
         os.system("sudo date +%D -s " + split[0])
         os.system("sudo date +%T -s " + split[1][:-6])
+        print("done")
