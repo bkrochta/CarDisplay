@@ -5,17 +5,16 @@ import time
 
 class Car:
 
-    def __init__ (self):
-        os.system('sudo rfcomm bind 0 00:1D:A5:00:48:7A')
+    def __init__ (self, address):
+        os.system('sudo rfcomm bind 0 ' + address)
         time.sleep(1)
         self.speed = 0
         self.average_speed = 0
         self.average_count = 0
         self.distance_traveled = 0
-        #self.start_time = time.monotonic()
+        self.start_time = time.monotonic()
         #obd.logger.setLevel(obd.logging.DEBUG)
         self.connection = obd.OBD()
-        self.started=True
     
 
     def get_speed(self):
@@ -25,6 +24,7 @@ class Car:
             speed (float) : in mph
         """
         self.speed = self.connection.query(obd.commands.SPEED).value.to('mph').magnitude
+
         return self.speed
 
 
@@ -46,10 +46,7 @@ class Car:
         Returns:
             distance (float) : in miles
         """
-        if self.started:
-            self.start_time=time.monotonic()
-            self.started = False
-        self.distance_traveled = self.average_speed * (time.monotonic() - self.start_time)
+        self.distance_traveled = self.average_speed * (time.monotonic() - self.start_time) / 3600
         
         return self.distance_traveled
 

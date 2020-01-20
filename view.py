@@ -11,13 +11,16 @@ import mpu9250
 # Thermometer addresses
 OUT_THERM_ADDR = '28-0315977942f6'
 
+# Bluetooth address of ELM OBD dongle
+ELM_ADDR = '00:1D:A5:00:48:7A'
+
 # Globals
 out_temp = '--'
 direction = '--'
 speed = 0
 avg_speed = 0
 dst_traveled = 0
-quit = 0
+quit = False
 scale = 4.5
 time_updated = False
 bad_speed = True
@@ -30,7 +33,7 @@ def __out_temp_thread():
     out_temp = out_therm.get_temp()
     if out_temp == None:
         out_temp = 'er'
-    while quit == 0:
+    while not quit:
         if not bad_speed:
             while speed < 10:
                 while speed < 10:
@@ -56,12 +59,12 @@ def __car_thread():
     global dst_traveled
     global bad_speed
 
-    c = car.Car()
-    while quit == 0:
+    c = car.Car(ELM_ADDR)
+    while not quit:
         speed = round(c.get_speed())
         bad_speed = False
         avg_speed = round(c.get_average_speed())
-        #dst_traveled = math.floor(c.get_distance_traveled())
+        dst_traveled = math.floor(c.get_distance_traveled())
         time.sleep(.1)
     
     c.connection.stop()
@@ -73,20 +76,16 @@ def __mpu_thread():
     mpu = mpu9250.MPU9250()
     count = 0
     #mpu.calibrate()
-    while quit == 0:
+    while not quit:
         if not (count % 100):
             direction = mpu.get_heading()
-        if not bad_speed:
-            accel = mpu.read_accel()
-            #print(x)
-            # speed = speed + (accel[1] * .01 *9.8*2.237)
         time.sleep(0.010)
         count+=1
 
 def __quit(e):
     global quit
 
-    quit = 1
+    quit = True
     root.destroy()
 
 
