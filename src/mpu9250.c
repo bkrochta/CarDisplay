@@ -117,7 +117,7 @@ void config_mpu(__u8 gfs, __u8 afs, __u8 mfs, __u8 mode){
 int read_accel_raw(__s16 *accel_raw){
     __u8 data[6];
 
-    if ((i2c_smbus_read_block_data(bus, ACCEL_OUT, &data)) < 0){
+    if ((i2c_smbus_read_block_data(bus, ACCEL_OUT, data)) < 0){
         return 1;
     }
 
@@ -131,7 +131,7 @@ int read_accel_raw(__s16 *accel_raw){
 int read_gyro_raw(__s16 *gyro_raw){
     __u8 data[6];
 
-    if ((i2c_smbus_read_block_data(bus, GYRO_OUT, &data)) < 0){
+    if ((i2c_smbus_read_block_data(bus, GYRO_OUT, data)) < 0){
         return 1;
     }
 
@@ -151,7 +151,7 @@ int read_mag_raw(__s16 *mag_raw){
     }
 
     // read raw data (little endian)
-    if ((i2c_smbus_read_block_data(bus, AK8963_MAGNET_OUT, &data)) < 0){
+    if ((i2c_smbus_read_block_data(bus, AK8963_MAGNET_OUT, data)) < 0){
         ioctl(bus, I2C_SLAVE, SLAVE_ADDRESS);
         return 1;
     }
@@ -173,7 +173,7 @@ int read_mag_raw(__s16 *mag_raw){
 int read_accel(float *accel){
     __s16 accel_raw[3];
 
-    if (read_accel_raw(&accel_raw)){
+    if (read_accel_raw(accel_raw)){
         return 1;
     }
 
@@ -187,7 +187,7 @@ int read_accel(float *accel){
 int read_gyro(float *gyro){
     __s16 gyro_raw[3];
 
-    if (read_gyro_raw(&gyro_raw)){
+    if (read_gyro_raw(gyro_raw)){
         return 1;
     }
 
@@ -206,7 +206,7 @@ int read_mag(float *mag){
     __s16 mag_raw[3];
     float mag_temp[3];
 
-    if (read_gyro_raw(&mag_raw)){
+    if (read_gyro_raw(mag_raw)){
         return 1;
     }
 

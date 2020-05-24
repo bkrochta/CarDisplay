@@ -8,7 +8,7 @@ void init_therm(){
 int get_temp(){
     int fd,  temp_f;
     double temp_c;
-    char buff[75], temp_raw[6], filename[45];
+    char buff[75], temp_raw[6], filename[45] = {0};
 
     strncpy(filename, "/sys/bus/w1/devices/", 20);
     strncat(filename, OUT_THERM_ADDR, 16);
