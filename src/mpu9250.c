@@ -97,7 +97,7 @@ void config_mpu(__u8 gfs, __u8 afs, __u8 mfs, __u8 mode){
 
     // read coef data
     ioctl(bus, I2C_SLAVE, AK8963_SLAVE_ADDRESS);
-    ret = i2c_smbus_read_block_data(bus, AK8963_ASAX, 3, &data);
+    ret = i2c_smbus_read_block_data(bus, AK8963_ASAX, &data);
 
     magXcoef = (data[0] - 128) / 256.0 + 1.0;
     magYcoef = (data[1] - 128) / 256.0 + 1.0;
@@ -117,7 +117,7 @@ void config_mpu(__u8 gfs, __u8 afs, __u8 mfs, __u8 mode){
 int read_accel_raw(__s16 *accel_raw){
     __u8 data[6];
 
-    if ((i2c_smbus_read_block_data(bus, ACCEL_OUT, 6, &data)) < 0){
+    if ((i2c_smbus_read_block_data(bus, ACCEL_OUT, &data)) < 0){
         return 1;
     }
 
@@ -131,7 +131,7 @@ int read_accel_raw(__s16 *accel_raw){
 int read_gyro_raw(__s16 *gyro_raw){
     __u8 data[6];
 
-    if ((i2c_smbus_read_block_data(bus, GYRO_OUT, 6, &data)) < 0){
+    if ((i2c_smbus_read_block_data(bus, GYRO_OUT, &data)) < 0){
         return 1;
     }
 
@@ -151,7 +151,7 @@ int read_mag_raw(__s16 *mag_raw){
     }
 
     // read raw data (little endian)
-    if ((i2c_smbus_read_block_data(bus, AK8963_MAGNET_OUT, 7, &data)) < 0){
+    if ((i2c_smbus_read_block_data(bus, AK8963_MAGNET_OUT, &data)) < 0){
         ioctl(bus, I2C_SLAVE, SLAVE_ADDRESS);
         return 1;
     }
