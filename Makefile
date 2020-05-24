@@ -1,5 +1,5 @@
 CC = gcc
-CCFLAGS := -Iinclude
+CCFLAGS := -Iinclude -g -Wall
 LDFLAGS = -lpthread
 PROGS = car_display
 

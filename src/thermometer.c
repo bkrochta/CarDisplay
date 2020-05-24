@@ -1,6 +1,6 @@
 #include "thermometer.h"
 
-void init(){
+void init_therm(){
     system("modprobe w1-gpio");
     system("modprobe w1-therm");
 }

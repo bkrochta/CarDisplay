@@ -1,7 +1,11 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/ioctl.h>
 #include <linux/i2c-dev.h>
+#include <linux/types.h>
 
 // https:#www.invensense.com/wp-content/uploads/2015/02/RM-MPU-9250A-00-v1.6.pdf
 // MPU9250 Default I2C slave address
@@ -96,15 +100,15 @@
 // 16bit output
 #define AK8963_BIT_16 0x01
 
-void init(int calibrate);
-void config(unsigned char gfs, unsigned char afs, unsigned char mfd, unsigned char mode);
-void read_accel_raw(double *ax, double *ay, double *az);
-void read_gyro_raw(double *gx, double *gy, double *gz);
-void read_mag_raw(double *mx, double *my, double *mz);
-void read_accel(double *ax, double *ay, double *az);
-void read_gyro(double *gx, double *gy, double *gz);
-void read_mag(double *mx, double *my, double *mz);
+void init_mpu(int calibrate);
+void config_mpu(__u8 gfs, __u8 afs, __u8 mfs, __u8 mode);
+int read_accel_raw(__s16 *accel_raw);
+int read_gyro_raw(__s16 *gyro_raw);
+int read_mag_raw(__s16 *mag_raw);
+int read_accel(float *accel);
+int read_gyro(float *gyro);
+int read_mag(float *mag);
 void calibrate_accel_gyro();
 void calibrate_mag();
 void get_heading(char *direction);
-double conv_data(unsigned char data1, unsigned char data2);
+__s16 conv_data(__u8 data1, __u8 data2);

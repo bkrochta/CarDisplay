@@ -6,5 +6,5 @@
 
 #define OUT_THERM_ADDR "28-0315977942f6"
 
-void init();
+void init_therm();
 int get_temp();
