@@ -58,44 +58,44 @@ void config_mpu(__u8 gfs, __u8 afs, __u8 mfs, __u8 mode){
     else //  mfs == AK8963_BIT_16:
         mres = 4912.0/32760.0;
 
-    // Configure MPU9250
-    // sleep off
+    printf("Configure MPU9250\n");
+    printf("sleep off\n");
     i2c_smbus_write_byte_data(bus, PWR_MGMT_1, 0x00);
     sleep(0.1);
-    // auto select clock source
+    printf("auto select clock source\n");
     i2c_smbus_write_byte_data(bus, PWR_MGMT_1, 0x01);
     sleep(0.1);
 
-    //// configure accelerometer
-    // accel full scale select
+    printf("configure accelerometer\n");
+    printf("accel full scale select\n");
     i2c_smbus_write_byte_data(bus, ACCEL_CONFIG, afs << 3);
-    // gyro full scale select
+    printf("gyro full scale select\n");
     i2c_smbus_write_byte_data(bus, GYRO_CONFIG, gfs << 3);
-    // A_DLPFCFG internal low pass filter for accelerometer to 10.2 Hz
+    printf("A_DLPFCFG internal low pass filter for accelerometer to 10.2 Hz\n");
     i2c_smbus_write_byte_data(bus, ACCEL_CONFIG_2, 0x05);
-    // DLPF_CFG internal low pass filter for gyroscope to 10 Hz
+    printf("DLPF_CFG internal low pass filter for gyroscope to 10 Hz\n");
     i2c_smbus_write_byte_data(bus, CONFIG, 0x05);
 
-    // sample rate divider
+    printf("sample rate divider\n");
     //i2c_smbus_write_byte_data(bus, SMPLRT_DIV, 0x04);
 
-    // magnetometer allow change to bypass multiplexer
+    printf("magnetometer allow change to bypass multiplexer\n");
     i2c_smbus_write_byte_data(bus, USER_CTRL, 0x00);
     sleep(0.01);
 
-    // BYPASS_EN turn on bypass multiplexer
+    printf("BYPASS_EN turn on bypass multiplexer\n");
     i2c_smbus_write_byte_data(bus, INT_PIN_CFG, 0x02);
     sleep(0.1);
 
-    // set power down mode
+    printf("set power down mode\n");
     i2c_smbus_write_byte_data(bus, AK8963_CNTL1, 0x00);
     sleep(0.1);
 
-    // set read FuseROM mode
+    printf("set read FuseROM mode\n");
     i2c_smbus_write_byte_data(bus, AK8963_CNTL1, 0x1F);
     sleep(0.1);
 
-    // read coef data
+    printf("read coef data\n");
     ioctl(bus, I2C_SLAVE, AK8963_SLAVE_ADDRESS);
     ret = i2c_smbus_read_block_data(bus, AK8963_ASAX, &data);
 
@@ -103,11 +103,11 @@ void config_mpu(__u8 gfs, __u8 afs, __u8 mfs, __u8 mode){
     magYcoef = (data[1] - 128) / 256.0 + 1.0;
     magZcoef = (data[2] - 128) / 256.0 + 1.0;
 
-    // set power down mode
+    printf("set power down mode\n");
     i2c_smbus_write_byte_data(bus, AK8963_CNTL1, 0x00);
     sleep(0.1);
 
-    // set scale&continous mode
+    printf("set scale&continous mode\n");
     i2c_smbus_write_byte_data(bus, AK8963_CNTL1, (mfs<<4|mode));
     ioctl(bus, I2C_SLAVE, SLAVE_ADDRESS);
 
@@ -150,14 +150,14 @@ int read_mag_raw(__s16 *mag_raw){
         continue;
     }
 
-    // read raw data (little endian)
+    printf("read raw data (little endian)\n");
     if ((i2c_smbus_read_block_data(bus, AK8963_MAGNET_OUT, data)) < 0){
         ioctl(bus, I2C_SLAVE, SLAVE_ADDRESS);
         return 1;
     }
     ioctl(bus, I2C_SLAVE, SLAVE_ADDRESS);
 
-    // check overflow
+    printf("check overflow\n");
     if ((data[6] & 0x08) != 0x08){
         mag_raw[0] = conv_data(data[0], data[1]);
         mag_raw[1] = conv_data(data[2], data[3]);
