@@ -56,56 +56,78 @@ void config_mpu(__u8 gfs, __u8 afs, __u8 mfs, __u8 mode){
         mres = 4912.0/32760.0;
 
     printf("Configure MPU9250\n");
+    // printf("reset\n");
+    // data[0] = 0x80;
+    // if(i2c_write(SLAVE_ADDRESS , PWR_MGMT_1, data, 1)) printf("failed\n");
+    // sleep(0.1);
     printf("sleep off\n");
-    i2c_write(SLAVE_ADDRESS , PWR_MGMT_1, 0x00, 1);
+    data[0] = 0x00;
+    if(i2c_write(SLAVE_ADDRESS , PWR_MGMT_1, data, 1)) printf("failed\n");
     sleep(0.1);
+    ret = i2c_read(SLAVE_ADDRESS , WHO_AM_I, data, 1);
+    printf("%d, %x\n",ret, data[0]);
+    
     printf("auto select clock source\n");
-    i2c_write(SLAVE_ADDRESS , PWR_MGMT_1, 0x01, 1);
+    data[0] = 0x01;
+    if(i2c_write(SLAVE_ADDRESS , PWR_MGMT_1, data, 1)) printf("failed\n");
+    printf("turn on accel and gyro\n");
+    data[0] = 0x00;
+    if(i2c_write(SLAVE_ADDRESS , PWR_MGMT_2, data, 1)) printf("failed\n");
     sleep(0.1);
 
     printf("configure accelerometer\n");
     printf("accel full scale select\n");
-    i2c_write(SLAVE_ADDRESS , ACCEL_CONFIG, afs << 3, 1);
+    data[0] = afs << 3;
+    if(i2c_write(SLAVE_ADDRESS , ACCEL_CONFIG, data, 1)) printf("failed\n");
     printf("gyro full scale select\n");
-    i2c_write(SLAVE_ADDRESS , GYRO_CONFIG, gfs << 3, 1);
+    data[0] = gfs << 3;
+    if(i2c_write(SLAVE_ADDRESS , GYRO_CONFIG, data, 1)) printf("failed\n");
     printf("A_DLPFCFG internal low pass filter for accelerometer to 10.2 Hz\n");
-    i2c_write(SLAVE_ADDRESS , ACCEL_CONFIG_2, 0x05, 1);
+    data[0] = 0x05;
+    if(i2c_write(SLAVE_ADDRESS , ACCEL_CONFIG_2, data, 1)) printf("failed\n");
     printf("DLPF_CFG internal low pass filter for gyroscope to 10 Hz\n");
-    i2c_write(SLAVE_ADDRESS , CONFIG, 0x05, 1);
+    data[0] = 0x05;
+    if(i2c_write(SLAVE_ADDRESS , CONFIG, data, 1)) printf("failed\n");
 
     printf("sample rate divider\n");
-    //i2c_write(SLAVE_ADDRESS , SMPLRT_DIV, 0x04, 1);
+    //if(i2c_write(SLAVE_ADDRESS , SMPLRT_DIV, 0x04, 1)) printf("failed\n");
 
     printf("magnetometer allow change to bypass multiplexer\n");
-    i2c_write(SLAVE_ADDRESS , USER_CTRL, 0x00, 1);
+    data[0] = 0x00;
+    if(i2c_write(SLAVE_ADDRESS , USER_CTRL, data, 1)) printf("failed\n");
     sleep(0.01);
 
     printf("BYPASS_EN turn on bypass multiplexer\n");
-    i2c_write(SLAVE_ADDRESS , INT_PIN_CFG, 0x02, 1);
+    data[0] = 0x02;
+    if(i2c_write(SLAVE_ADDRESS , INT_PIN_CFG, data, 1)) printf("failed\n");
     sleep(0.1);
 
     printf("set power down mode\n");
-    i2c_write(AK8963_SLAVE_ADDRESS , AK8963_CNTL1, 0x00, 1);
+    data[0] = 0x00;
+    if(i2c_write(AK8963_SLAVE_ADDRESS , AK8963_CNTL1, data, 1)) printf("failed\n");
     sleep(0.1);
 
     printf("set read FuseROM mode\n");
-    i2c_write(AK8963_SLAVE_ADDRESS , AK8963_CNTL1, 0x1F, 1);
+    data[0] = 0x1F;
+    if(i2c_write(AK8963_SLAVE_ADDRESS , AK8963_CNTL1, data, 1)) printf("failed\n");
     sleep(0.1);
 
     printf("read coef data\n");
-    ret = i2c_read(AK8963_SLAVE_ADDRESS , AK8963_ASAX, &data, 3);
+    ret = i2c_read(AK8963_SLAVE_ADDRESS , AK8963_ASAX, data, 3);
+    printf("%d\n", ret);
 
     magXcoef = (data[0] - 128) / 256.0 + 1.0;
     magYcoef = (data[1] - 128) / 256.0 + 1.0;
     magZcoef = (data[2] - 128) / 256.0 + 1.0;
 
     printf("set power down mode\n");
-    i2c_write(AK8963_SLAVE_ADDRESS , AK8963_CNTL1, 0x00, 1);
+    data[0] = 0x00;
+    if(i2c_write(AK8963_SLAVE_ADDRESS , AK8963_CNTL1, data, 1)) printf("failed\n");
     sleep(0.1);
 
     printf("set scale&continous mode\n");
-    i2c_write(AK8963_SLAVE_ADDRESS , AK8963_CNTL1, (mfs<<4|mode), 1);
-    ioctl(bus, I2C_SLAVE, SLAVE_ADDRESS);
+    data[0] = (mfs<<4|mode);
+    if(i2c_write(AK8963_SLAVE_ADDRESS , AK8963_CNTL1, data, 1)) printf("failed\n");
 
     sleep(0.1);
 }
@@ -113,7 +135,8 @@ void config_mpu(__u8 gfs, __u8 afs, __u8 mfs, __u8 mode){
 int read_accel_raw(__s16 *accel_raw){
     __u8 data[6];
 
-    if ((i2c_read(SLAVE_ADDRESS , ACCEL_OUT, data, 6)) < 0){
+    if (i2c_read(SLAVE_ADDRESS , ACCEL_OUT, data, 6)){
+        printf("failed\n");
         return 1;
     }
 
@@ -128,6 +151,7 @@ int read_gyro_raw(__s16 *gyro_raw){
     __u8 data[6];
 
     if ((i2c_read(SLAVE_ADDRESS , GYRO_OUT, data, 6)) < 0){
+        printf("failed\n");
         return 1;
     }
 
@@ -141,11 +165,12 @@ int read_mag_raw(__s16 *mag_raw){
     __u8 data[7];
 
     do {
-        i2c_read(AK8963_SLAVE_ADDRESS , AK8963_ST1, data, 1);
+        if(i2c_read(AK8963_SLAVE_ADDRESS , AK8963_ST1, data, 1)) printf("failed\n");
     } while (data[0] == 0x00);
 
     printf("read raw data (little endian)\n");
     if ((i2c_read(AK8963_SLAVE_ADDRESS , AK8963_MAGNET_OUT, data, 7)) < 0){
+        printf("failed\n");
         return 1;
     }
 
@@ -166,6 +191,7 @@ int read_accel(float *accel){
     __s16 accel_raw[3];
 
     if (read_accel_raw(accel_raw)){
+        printf("failed\n");
         return 1;
     }
 
@@ -180,6 +206,7 @@ int read_gyro(float *gyro){
     __s16 gyro_raw[3];
 
     if (read_gyro_raw(gyro_raw)){
+        printf("failed\n");
         return 1;
     }
 
@@ -199,6 +226,7 @@ int read_mag(float *mag){
     float mag_temp[3];
 
     if (read_gyro_raw(mag_raw)){
+        printf("failed\n");
         return 1;
     }
 
@@ -245,6 +273,9 @@ int i2c_read(__u8 slave_addr, __u8 reg_addr, __u8 *data, __u8 length) {
         return 10;
     }
 
+    count = 0;
+    tries = 0;
+
     while ((count < length) && tries < 5) {
         if ((ret = read(bus, data + count, length - count)) < 0){
             printf("Failed to read I2C\n");
@@ -273,9 +304,8 @@ int i2c_write(__u8 slave_addr, __u8 reg_addr, __u8 *data, __u8 length){
         return 10;
     }
     if (length == 0){
-        if ((write(bus, reg_addr, 1)) != 1){
+        if ((write(bus, &reg_addr, 1)) != 1){
             printf("Failed to write register\n");
-            free(buff);
             return 11;
         }
     } else{
