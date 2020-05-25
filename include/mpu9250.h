@@ -113,3 +113,5 @@ void calibrate_accel_gyro();
 void calibrate_mag();
 void get_heading(char *direction);
 __s16 conv_data(__u8 data1, __u8 data2);
+int i2c_read(__u8 slave_addr, __u8 reg_addr, __u8 *data, __u8 length);
+int i2c_write(__u8 slave_addr, __u8 reg_addr, __u8 *data, __u8 length);

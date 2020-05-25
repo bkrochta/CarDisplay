@@ -14,10 +14,7 @@ void init_mpu(int calibrate){
         printf("Failed to open i2c bus\n");
         exit(1);
     }
-    if (ioctl(bus, I2C_SLAVE, SLAVE_ADDRESS) < 0) {
-        printf("Failed to open mpu9250\n");
-        exit(2);
-    }
+
     config_mpu(GFS_250, AFS_2G, AK8963_BIT_16, AK8963_MODE_C100HZ);
 
     if(calibrate){
@@ -60,55 +57,54 @@ void config_mpu(__u8 gfs, __u8 afs, __u8 mfs, __u8 mode){
 
     printf("Configure MPU9250\n");
     printf("sleep off\n");
-    i2c_smbus_write_byte_data(bus, PWR_MGMT_1, 0x00);
+    i2c_write(SLAVE_ADDRESS , PWR_MGMT_1, 0x00, 1);
     sleep(0.1);
     printf("auto select clock source\n");
-    i2c_smbus_write_byte_data(bus, PWR_MGMT_1, 0x01);
+    i2c_write(SLAVE_ADDRESS , PWR_MGMT_1, 0x01, 1);
     sleep(0.1);
 
     printf("configure accelerometer\n");
     printf("accel full scale select\n");
-    i2c_smbus_write_byte_data(bus, ACCEL_CONFIG, afs << 3);
+    i2c_write(SLAVE_ADDRESS , ACCEL_CONFIG, afs << 3, 1);
     printf("gyro full scale select\n");
-    i2c_smbus_write_byte_data(bus, GYRO_CONFIG, gfs << 3);
+    i2c_write(SLAVE_ADDRESS , GYRO_CONFIG, gfs << 3, 1);
     printf("A_DLPFCFG internal low pass filter for accelerometer to 10.2 Hz\n");
-    i2c_smbus_write_byte_data(bus, ACCEL_CONFIG_2, 0x05);
+    i2c_write(SLAVE_ADDRESS , ACCEL_CONFIG_2, 0x05, 1);
     printf("DLPF_CFG internal low pass filter for gyroscope to 10 Hz\n");
-    i2c_smbus_write_byte_data(bus, CONFIG, 0x05);
+    i2c_write(SLAVE_ADDRESS , CONFIG, 0x05, 1);
 
     printf("sample rate divider\n");
-    //i2c_smbus_write_byte_data(bus, SMPLRT_DIV, 0x04);
+    //i2c_write(SLAVE_ADDRESS , SMPLRT_DIV, 0x04, 1);
 
     printf("magnetometer allow change to bypass multiplexer\n");
-    i2c_smbus_write_byte_data(bus, USER_CTRL, 0x00);
+    i2c_write(SLAVE_ADDRESS , USER_CTRL, 0x00, 1);
     sleep(0.01);
 
     printf("BYPASS_EN turn on bypass multiplexer\n");
-    i2c_smbus_write_byte_data(bus, INT_PIN_CFG, 0x02);
+    i2c_write(SLAVE_ADDRESS , INT_PIN_CFG, 0x02, 1);
     sleep(0.1);
 
     printf("set power down mode\n");
-    i2c_smbus_write_byte_data(bus, AK8963_CNTL1, 0x00);
+    i2c_write(AK8963_SLAVE_ADDRESS , AK8963_CNTL1, 0x00, 1);
     sleep(0.1);
 
     printf("set read FuseROM mode\n");
-    i2c_smbus_write_byte_data(bus, AK8963_CNTL1, 0x1F);
+    i2c_write(AK8963_SLAVE_ADDRESS , AK8963_CNTL1, 0x1F, 1);
     sleep(0.1);
 
     printf("read coef data\n");
-    ioctl(bus, I2C_SLAVE, AK8963_SLAVE_ADDRESS);
-    ret = i2c_smbus_read_block_data(bus, AK8963_ASAX, &data);
+    ret = i2c_read(AK8963_SLAVE_ADDRESS , AK8963_ASAX, &data, 3);
 
     magXcoef = (data[0] - 128) / 256.0 + 1.0;
     magYcoef = (data[1] - 128) / 256.0 + 1.0;
     magZcoef = (data[2] - 128) / 256.0 + 1.0;
 
     printf("set power down mode\n");
-    i2c_smbus_write_byte_data(bus, AK8963_CNTL1, 0x00);
+    i2c_write(AK8963_SLAVE_ADDRESS , AK8963_CNTL1, 0x00, 1);
     sleep(0.1);
 
     printf("set scale&continous mode\n");
-    i2c_smbus_write_byte_data(bus, AK8963_CNTL1, (mfs<<4|mode));
+    i2c_write(AK8963_SLAVE_ADDRESS , AK8963_CNTL1, (mfs<<4|mode), 1);
     ioctl(bus, I2C_SLAVE, SLAVE_ADDRESS);
 
     sleep(0.1);
@@ -117,7 +113,7 @@ void config_mpu(__u8 gfs, __u8 afs, __u8 mfs, __u8 mode){
 int read_accel_raw(__s16 *accel_raw){
     __u8 data[6];
 
-    if ((i2c_smbus_read_block_data(bus, ACCEL_OUT, data)) < 0){
+    if ((i2c_read(SLAVE_ADDRESS , ACCEL_OUT, data, 6)) < 0){
         return 1;
     }
 
@@ -131,7 +127,7 @@ int read_accel_raw(__s16 *accel_raw){
 int read_gyro_raw(__s16 *gyro_raw){
     __u8 data[6];
 
-    if ((i2c_smbus_read_block_data(bus, GYRO_OUT, data)) < 0){
+    if ((i2c_read(SLAVE_ADDRESS , GYRO_OUT, data, 6)) < 0){
         return 1;
     }
 
@@ -144,18 +140,14 @@ int read_gyro_raw(__s16 *gyro_raw){
 int read_mag_raw(__s16 *mag_raw){
     __u8 data[7];
 
-    ioctl(bus, I2C_SLAVE, AK8963_SLAVE_ADDRESS);
-
-    while ((i2c_smbus_read_byte_data(AK8963_SLAVE_ADDRESS, AK8963_ST1)) == 0x00){
-        continue;
-    }
+    do {
+        i2c_read(AK8963_SLAVE_ADDRESS , AK8963_ST1, data, 1);
+    } while (data[0] == 0x00);
 
     printf("read raw data (little endian)\n");
-    if ((i2c_smbus_read_block_data(bus, AK8963_MAGNET_OUT, data)) < 0){
-        ioctl(bus, I2C_SLAVE, SLAVE_ADDRESS);
+    if ((i2c_read(AK8963_SLAVE_ADDRESS , AK8963_MAGNET_OUT, data, 7)) < 0){
         return 1;
     }
-    ioctl(bus, I2C_SLAVE, SLAVE_ADDRESS);
 
     printf("check overflow\n");
     if ((data[6] & 0x08) != 0x08){
@@ -244,4 +236,60 @@ __s16 conv_data(__u8 data1, __u8 data2) {
     }
 
     return value;
+}
+
+int i2c_read(__u8 slave_addr, __u8 reg_addr, __u8 *data, __u8 length) {
+    int count, ret, tries;
+
+    if (i2c_write(slave_addr, reg_addr, NULL, 0)) {
+        return 10;
+    }
+
+    while ((count < length) && tries < 5) {
+        if ((ret = read(bus, data + count, length - count)) < 0){
+            printf("Failed to read I2C\n");
+            return 8;
+        }
+        count += ret;
+
+        if (count == length) break;
+
+        sleep(.01);
+        tries++;
+    }
+    if (count < length){
+        printf("failed to read I2C\n");
+        return 9;
+    }
+
+    return 0;
+}
+
+int i2c_write(__u8 slave_addr, __u8 reg_addr, __u8 *data, __u8 length){
+    __u8 *buff;
+
+    if (ioctl(bus, I2C_SLAVE, slave_addr) < 0) {
+        printf("Failed to open slave address\n");
+        return 10;
+    }
+    if (length == 0){
+        if ((write(bus, reg_addr, 1)) != 1){
+            printf("Failed to write register\n");
+            free(buff);
+            return 11;
+        }
+    } else{
+        buff = (__u8 *) calloc(1, length + 1);
+        buff[0] = reg_addr;
+        memcpy(buff + 1, data, length);
+
+        if ((write(bus, buff, length + 1)) != length + 1){
+            printf("Failed to write to register\n");
+            free(buff);
+            return 12;
+        }
+        free(buff);
+    }
+
+    return 0;
 }
