@@ -43,7 +43,7 @@ int main(int argc, char **argv){
     
 
     temp = gtk_label_new(NULL);
-    temp_font = g_strdup_printf("<span font=\"45\" color=\"red\">"
+    temp_font = g_strdup_printf("<span font=\"40\" color=\"red\">"
                                "<b>120</b>"
                              "</span>");
     gtk_label_set_markup(GTK_LABEL(temp), temp_font);
@@ -63,7 +63,7 @@ int main(int argc, char **argv){
     gtk_grid_attach_next_to(GTK_GRID(grid_temp), temp_unit, temp, GTK_POS_RIGHT, 1, 1);
     
     direction = gtk_label_new(NULL);
-    direction_font = g_strdup_printf("<span font=\"45\" color=\"red\">"
+    direction_font = g_strdup_printf("<span font=\"40\" color=\"red\">"
                                "<b>NW</b>"
                              "</span>");
     gtk_label_set_markup(GTK_LABEL(direction), direction_font);
@@ -73,14 +73,14 @@ int main(int argc, char **argv){
     gtk_grid_attach(GTK_GRID(grid_top), direction, 0, 0, 1, 1);
 
     time = gtk_label_new(NULL);
-    time_font = g_strdup_printf("<span font=\"70\" color=\"red\">"
+    time_font = g_strdup_printf("<span font=\"60\" color=\"red\">"
                                "<b>12:20</b>"
                              "</span>");
     gtk_label_set_markup(GTK_LABEL(time), time_font);
     free(time_font);
     gtk_widget_set_halign (time, GTK_ALIGN_CENTER);
     gtk_widget_set_valign (time, GTK_ALIGN_START);
-    //gtk_widget_set_hexpand (time, TRUE);
+    gtk_widget_set_hexpand (time, TRUE);
     gtk_grid_attach(GTK_GRID(grid_top), time, 1, 0, 1, 1);
 
 
@@ -93,7 +93,7 @@ int main(int argc, char **argv){
 
 
     speed = gtk_label_new(NULL);
-    speed_font = g_strdup_printf("<span font=\"175\" color=\"red\" background=\"black\">"
+    speed_font = g_strdup_printf("<span font=\"120\" color=\"red\" background=\"black\">"
                                "<b>100</b>"
                              "</span>");
     gtk_label_set_markup(GTK_LABEL(speed), speed_font);
@@ -132,10 +132,10 @@ int main(int argc, char **argv){
                              "</span>");
     gtk_label_set_markup(GTK_LABEL(a_speed_l), a_speed_l_font);
     free(a_speed_l_font);
-    gtk_grid_attach(GTK_GRID(grid_a_speed), a_speed_l, 0, 0, 1, 1);
+    gtk_grid_attach(GTK_GRID(grid_a_speed), a_speed_l, 0, 0, 2, 1);
 
     a_speed = gtk_label_new(NULL);
-    a_speed_font = g_strdup_printf("<span font=\"45\" color=\"red\">"
+    a_speed_font = g_strdup_printf("<span font=\"40\" color=\"red\">"
                                "<b>60</b>"
                              "</span>");
     gtk_label_set_markup(GTK_LABEL(a_speed), a_speed_font);
@@ -165,10 +165,10 @@ int main(int argc, char **argv){
                              "</span>");
     gtk_label_set_markup(GTK_LABEL(dst_l), dst_l_font);
     free(dst_l_font);
-    gtk_grid_attach(GTK_GRID(grid_dst), dst_l, 0, 0, 1, 1);
+    gtk_grid_attach(GTK_GRID(grid_dst), dst_l, 0, 0, 2, 1);
 
     dst = gtk_label_new(NULL);
-    dst_font = g_strdup_printf("<span font=\"45\" color=\"red\">"
+    dst_font = g_strdup_printf("<span font=\"40\" color=\"red\">"
                                "<b>200</b>"
                              "</span>");
     gtk_label_set_markup(GTK_LABEL(dst), dst_font);
@@ -256,14 +256,14 @@ int update(gpointer labels){
     fscanf(fp, "%[^\n]s", time);
     pclose(fp);
 
-    font = g_strdup_printf("<span font=\"45\" color=\"red\">"
+    font = g_strdup_printf("<span font=\"60\" color=\"red\">"
                                "<b>%s</b>"
                              "</span>", time);
     gtk_label_set_markup(GTK_LABEL(data->time), font);
     free(font);
 
     pthread_mutex_lock(&mutex_therm);
-    font = g_strdup_printf("<span font=\"45\" color=\"red\">"
+    font = g_strdup_printf("<span font=\"40\" color=\"red\">"
                                "<b>%d</b>"
                              "</span>", temperature);
     pthread_mutex_unlock(&mutex_therm);
@@ -271,7 +271,7 @@ int update(gpointer labels){
     free(font);
 
     pthread_mutex_lock(&mutex_compass);
-    font = g_strdup_printf("<span font=\"45\" color=\"red\">"
+    font = g_strdup_printf("<span font=\"40\" color=\"red\">"
                                "<b>%s</b>"
                              "</span>", curr_direction);
     pthread_mutex_unlock(&mutex_compass);
@@ -279,13 +279,13 @@ int update(gpointer labels){
     free(font);
 
     pthread_mutex_lock(&mutex_obd);
-    font = g_strdup_printf("<span font=\"175\" color=\"red\" >"
+    font = g_strdup_printf("<span font=\"120\" color=\"red\" >"
                                "<b>%d</b>"
                              "</span>", current_speed);
-    font1 = g_strdup_printf("<span font=\"45\" color=\"red\">"
+    font1 = g_strdup_printf("<span font=\"40\" color=\"red\">"
                                "<b>%d</b>"
                              "</span>", average_speed);
-    font2 = g_strdup_printf("<span font=\"45\" color=\"red\">"
+    font2 = g_strdup_printf("<span font=\"40\" color=\"red\">"
                                "<b>%d</b>"
                              "</span>", distance_traveled);
     pthread_mutex_unlock(&mutex_obd);
