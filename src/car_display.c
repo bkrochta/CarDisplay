@@ -230,7 +230,7 @@ void *obd_thread(void *args){
     }
 
     while(run){
-        timout = 0;
+        timeout = 0;
         pthread_mutex_lock(&mutex_obd);
         ret = get_speed(&current_speed);
         while(ret && timeout < 5){
