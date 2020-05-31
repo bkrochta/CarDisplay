@@ -220,12 +220,24 @@ void *thermometer_thread(void *args){
 }
 
 void *obd_thread(void *args){
-    int ret;
+    int ret, timeout = 0;
 
-    init_obd();
+    ret = init_obd();
+    while(ret && timeout < 5){
+        sleep(2);
+        ret = init_obd();
+        timeout++;
+    }
+
     while(run){
+        timout = 0;
         pthread_mutex_lock(&mutex_obd);
         ret = get_speed(&current_speed);
+        while(ret && timeout < 5){
+            sleep(1);
+            ret = get_speed(&current_speed);
+            timeout++;
+        }
         get_average_speed(&average_speed, &current_speed);
         get_distance_traveled(&distance_traveled, &current_speed);
         pthread_mutex_unlock(&mutex_obd);

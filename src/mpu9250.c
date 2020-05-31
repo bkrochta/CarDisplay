@@ -223,7 +223,7 @@ int read_mag(float *mag){
     __s16 mag_raw[3];
     float mag_temp[3];
 
-    if (read_gyro_raw(mag_raw)){
+    if (read_mag_raw(mag_raw)){
         printf("failed\n");
         return 1;
     }
