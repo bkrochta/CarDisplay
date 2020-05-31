@@ -30,7 +30,7 @@ int main(int argc, char **argv){
     
     grid_top = gtk_grid_new();
     gtk_grid_attach(GTK_GRID(grid), grid_top, 0, 0, 1, 1);
-    gtk_grid_set_column_homogeneous(GTK_GRID(grid_top), TRUE);
+    //gtk_grid_set_column_homogeneous(GTK_GRID(grid_top), TRUE);
     gtk_widget_set_valign (grid_top, GTK_ALIGN_START);
     gtk_widget_set_vexpand (grid_top, TRUE);
     // gtk_widget_set_hexpand (grid_top, TRUE);
@@ -44,7 +44,7 @@ int main(int argc, char **argv){
 
     temp = gtk_label_new(NULL);
     temp_font = g_strdup_printf("<span font=\"40\" color=\"red\">"
-                               "<b>120</b>"
+                               "<b>--</b>"
                              "</span>");
     gtk_label_set_markup(GTK_LABEL(temp), temp_font);
     free(temp_font);
@@ -64,7 +64,7 @@ int main(int argc, char **argv){
     
     direction = gtk_label_new(NULL);
     direction_font = g_strdup_printf("<span font=\"40\" color=\"red\">"
-                               "<b>NW</b>"
+                               "<b>--</b>"
                              "</span>");
     gtk_label_set_markup(GTK_LABEL(direction), direction_font);
     free(direction_font);
@@ -73,8 +73,8 @@ int main(int argc, char **argv){
     gtk_grid_attach(GTK_GRID(grid_top), direction, 0, 0, 1, 1);
 
     time = gtk_label_new(NULL);
-    time_font = g_strdup_printf("<span font=\"60\" color=\"red\">"
-                               "<b>12:20</b>"
+    time_font = g_strdup_printf("<span font=\"70\" color=\"red\">"
+                               "<b>00:00</b>"
                              "</span>");
     gtk_label_set_markup(GTK_LABEL(time), time_font);
     free(time_font);
@@ -87,30 +87,30 @@ int main(int argc, char **argv){
     grid_speed = gtk_grid_new();
     gtk_widget_set_halign (grid_speed, GTK_ALIGN_CENTER);
     gtk_widget_set_valign (grid_speed, GTK_ALIGN_CENTER);
-    // gtk_widget_set_vexpand (grid_speed, TRUE);
+     gtk_widget_set_vexpand (grid_speed, TRUE);
      gtk_widget_set_hexpand (grid_speed, FALSE);
     gtk_grid_attach(GTK_GRID(grid), grid_speed, 0, 1, 1, 1);
 
 
     speed = gtk_label_new(NULL);
     speed_font = g_strdup_printf("<span font=\"120\" color=\"red\" background=\"black\">"
-                               "<b>100</b>"
+                               "<b>0</b>"
                              "</span>");
     gtk_label_set_markup(GTK_LABEL(speed), speed_font);
     free(speed_font);
     gtk_widget_set_halign (speed, GTK_ALIGN_CENTER);
     gtk_widget_set_valign (speed, GTK_ALIGN_CENTER);
-    
+    //gtk_widget_set_vexpand(speed,TRUE);
     gtk_grid_attach(GTK_GRID(grid_speed), speed, 0, 1, 1, 1);
 
     speed_unit = gtk_label_new(NULL);
     speed_unit_font = g_strdup_printf("<span font=\"12\" color=\"red\">"
-                               "<b>mph</b>"
+                               "<b>   mph</b>"
                              "</span>");
     gtk_label_set_markup(GTK_LABEL(speed_unit), speed_unit_font);
     free(speed_unit_font);
     gtk_widget_set_halign (speed_unit, GTK_ALIGN_CENTER);
-    //gtk_widget_set_valign (speed_unit, GTK_ALIGN_END);
+    gtk_widget_set_valign (speed_unit, GTK_ALIGN_END);
     gtk_grid_attach_next_to(GTK_GRID(grid_speed), speed_unit, speed, GTK_POS_RIGHT, 1, 1);
 
 
@@ -136,7 +136,7 @@ int main(int argc, char **argv){
 
     a_speed = gtk_label_new(NULL);
     a_speed_font = g_strdup_printf("<span font=\"40\" color=\"red\">"
-                               "<b>60</b>"
+                               "<b>0</b>"
                              "</span>");
     gtk_label_set_markup(GTK_LABEL(a_speed), a_speed_font);
     free(a_speed_font);
@@ -169,7 +169,7 @@ int main(int argc, char **argv){
 
     dst = gtk_label_new(NULL);
     dst_font = g_strdup_printf("<span font=\"40\" color=\"red\">"
-                               "<b>200</b>"
+                               "<b>0</b>"
                              "</span>");
     gtk_label_set_markup(GTK_LABEL(dst), dst_font);
     free(dst_font);
@@ -252,11 +252,11 @@ int update(gpointer labels){
     struct update_data *data = (struct update_data *) labels;
     FILE *fp;
 
-    fp = popen("date +\"%-I:%M %P\"","r");
+    fp = popen("date +\"%-I:%M\"","r");
     fscanf(fp, "%[^\n]s", time);
     pclose(fp);
 
-    font = g_strdup_printf("<span font=\"60\" color=\"red\">"
+    font = g_strdup_printf("<span font=\"70\" color=\"red\">"
                                "<b>%s</b>"
                              "</span>", time);
     gtk_label_set_markup(GTK_LABEL(data->time), font);
