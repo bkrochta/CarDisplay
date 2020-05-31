@@ -7,7 +7,7 @@ float gyro_bias[] = {0,0,0};
 float gres, ares, mres, magXcoef, magYcoef, magZcoef;
 int bus;
 
-void init_mpu(int calibrate){
+void init_mpu(){
     int cal_data;
     char buff[66];
     if ((bus = open("/dev/i2c-1", O_RDWR)) < 0){
@@ -17,16 +17,14 @@ void init_mpu(int calibrate){
 
     config_mpu(GFS_250, AFS_2G, AK8963_BIT_16, AK8963_MODE_C100HZ);
 
-    if(calibrate){
-        calibrate_mag();
-    } else{
-        if ((cal_data = open("/home/pi/CarDisplay/calibration_data", O_RDONLY)) < 0){
-            printf("Failed to open calibration data file\n");
-            exit(3);
-        }
-        read(cal_data, buff, 65);
-        sscanf(buff,"%f,%f,%f,%f,%f,%f", &mag_scale[0], &mag_scale[1], &mag_scale[2], &mag_bias[0], &mag_bias[1], &mag_bias[2]);
+    
+    if ((cal_data = open("/home/pi/CarDisplay/calibration_data", O_RDONLY)) < 0){
+        printf("Failed to open calibration data file\n");
+        exit(3);
     }
+    read(cal_data, buff, 65);
+    sscanf(buff,"%f,%f,%f,%f,%f,%f", &mag_scale[0], &mag_scale[1], &mag_scale[2], &mag_bias[0], &mag_bias[1], &mag_bias[2]);
+    
 }
 void config_mpu(__u8 gfs, __u8 afs, __u8 mfs, __u8 mode){
     __u8 data[3];
@@ -245,15 +243,37 @@ int read_mag(float *mag){
     return 0;
 }
 
-void calibrate_accel_gyro(){
+void get_heading(char *direction){
+    float mag[3];
+    double heading;
 
+    if(read_mag(mag)) {
+        strcpy(direction, "NA");
+    } else{
+        heading = atan2(mag[0], -mag[1]);
+        if (heading < 0)
+            heading += 360;
+
+        if(heading <= 22.5)
+            strcpy(direction, "N");
+        else if(heading < 67.5)
+            strcpy(direction, "NE");
+        else if(heading <= 112.5)
+            strcpy(direction, "E");
+        else if(heading < 157.5)
+            strcpy(direction, "SE");
+        else if(heading <= 202.5)
+            strcpy(direction, "S");
+        else if(heading < 247.5)
+            strcpy(direction, "SW");
+        else if(heading <= 292.5)
+            strcpy(direction, "W");
+        else if(heading < 337.5)
+            strcpy(direction, "NW");
+        else
+            strcpy(direction, "N");
+    }
 }
-
-void calibrate_mag(){
-
-}
-
-void get_heading(char *direction);
 
 __s16 conv_data(__u8 data1, __u8 data2) {
     __s16 value;

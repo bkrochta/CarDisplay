@@ -6,6 +6,7 @@
 #include <sys/ioctl.h>
 #include <linux/i2c-dev.h>
 #include <linux/types.h>
+#include <math.h>
 
 // https:#www.invensense.com/wp-content/uploads/2015/02/RM-MPU-9250A-00-v1.6.pdf
 // MPU9250 Default I2C slave address
@@ -100,7 +101,7 @@
 // 16bit output
 #define AK8963_BIT_16 0x01
 
-void init_mpu(int calibrate);
+void init_mpu();
 void config_mpu(__u8 gfs, __u8 afs, __u8 mfs, __u8 mode);
 int read_accel_raw(__s16 *accel_raw);
 int read_gyro_raw(__s16 *gyro_raw);
@@ -108,8 +109,6 @@ int read_mag_raw(__s16 *mag_raw);
 int read_accel(float *accel);
 int read_gyro(float *gyro);
 int read_mag(float *mag);
-void calibrate_accel_gyro();
-void calibrate_mag();
 void get_heading(char *direction);
 __s16 conv_data(__u8 data1, __u8 data2);
 int i2c_read(__u8 slave_addr, __u8 reg_addr, __u8 *data, __u8 length);

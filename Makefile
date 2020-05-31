@@ -1,6 +1,6 @@
 CC = gcc
-CCFLAGS := -Iinclude -g -Wall
-LDFLAGS = -lpthread
+CCFLAGS := -Iinclude -g -Wall `pkg-config --cflags gtk+-3.0`
+LDFLAGS = -lpthread -lm `pkg-config --libs gtk+-3.0`
 PROGS = car_display
 
 CFILES := $(wildcard src/*.c)

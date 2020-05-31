@@ -1,18 +1,20 @@
 #include "thermometer.h"
 
+char filename[45] = {0};
+
 void init_therm(){
     system("modprobe w1-gpio");
     system("modprobe w1-therm");
+
+    strncpy(filename, "/sys/bus/w1/devices/", 21);
+    strncat(filename, OUT_THERM_ADDR, 16);
+    strncat(filename, "/w1_slave", 10);
 }
 
 int get_temp(){
     int fd,  temp_f;
     double temp_c;
-    char buff[75], temp_raw[6], filename[45] = {0};
-
-    strncpy(filename, "/sys/bus/w1/devices/", 20);
-    strncat(filename, OUT_THERM_ADDR, 16);
-    strncat(filename, "/w1_slave", 10);
+    char buff[75], temp_raw[6];
 
     if((fd = open(filename, O_RDONLY)) < 0) {
         printf("Failed to open therm file\n");
@@ -23,6 +25,7 @@ int get_temp(){
         printf("Failed to read device file\n");
         return -100;
     }
+    close(fd);
     temp_raw[0] = buff[69];
 	temp_raw[1] = buff[70];
 	temp_raw[2] = buff[71];
