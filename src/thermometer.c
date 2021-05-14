@@ -5,36 +5,37 @@ char filename[45] = {0};
 void init_therm(){
     system("modprobe w1-gpio");
     system("modprobe w1-therm");
-
+    
     strncpy(filename, "/sys/bus/w1/devices/", 21);
     strncat(filename, OUT_THERM_ADDR, 16);
     strncat(filename, "/w1_slave", 10);
 }
 
-int get_temp(){
-    int fd,  temp_f;
+/* Get temperature in F.
+** Returns 0 on success
+ */ 
+int get_temp(int* temp){
+    int fd;
     double temp_c;
     char buff[75], temp_raw[6];
 
+    memset(buff, 0, 75);
     if((fd = open(filename, O_RDONLY)) < 0) {
-        printf("Failed to open therm file\n");
-        return -100;
+        fprintf(stderr, "Thermometer: Failed to open therm file.\n");
+        return 1;
     }
 
     if((read(fd, buff, 74)) != 74){
-        printf("Failed to read device file\n");
-        return -100;
+        fprintf(stderr, "Thermometer: Failed to read device file.\n");
+        close(fd);
+        return 2;
     }
     close(fd);
-    temp_raw[0] = buff[69];
-	temp_raw[1] = buff[70];
-	temp_raw[2] = buff[71];
-	temp_raw[3] = buff[72];
-	temp_raw[4] = buff[73];
-	temp_raw[5] = buff[74];
+
+    memcpy(temp_raw, buff+69, 6);
 
     temp_c = atof(temp_raw) / 1000.0;
-    temp_f = (int) (temp_c * 9.0 / 5.0 + 32.0);
+    *temp = (int) (temp_c * 9.0 / 5.0 + 32.0);
 
-    return temp_f;
+    return 0;
 }

@@ -208,13 +208,18 @@ int main(int argc, char **argv){
 }
 
 void *thermometer_thread(void *args){
+    int ret;
+
     init_therm();
 
     while(run){
         pthread_mutex_lock(&mutex_therm);
-        temperature = get_temp();
+        ret = get_temp(&temperature);
+        if (ret) temperature = 0;
         pthread_mutex_unlock(&mutex_therm);
-        sleep(5);
+
+        if (ret) sleep(10);
+        else sleep(5);
     }
     return NULL;
 }
