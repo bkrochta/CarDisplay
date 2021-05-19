@@ -13,4 +13,5 @@ int init_obd();
 int get_speed(int *speed);
 void get_average_speed(int *avg_speed, int *curr_speed);
 void get_distance_traveled(int *dst, int *avg_speed);
-int read_obd(char *result);
+int read_obd(char *response, size_t len);
+int send_command(char *command, size_t command_len, char *response, size_t response_len);
