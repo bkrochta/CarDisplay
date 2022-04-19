@@ -1,5 +1,5 @@
 CC = gcc
-CCFLAGS := -Iinclude -g -Wall `pkg-config --cflags gtk+-3.0`
+CCFLAGS := -Iinclude -g -Wall -O3 `pkg-config --cflags gtk+-3.0`
 LDFLAGS = -lpthread -lm `pkg-config --libs gtk+-3.0`
 PROGS = car_display
 
