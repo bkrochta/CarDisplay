@@ -91,14 +91,14 @@ int read_obd(char *response, size_t len){
 
 int get_speed(int *speed){
     char buff[32];
-    int speed_kmh;
+    __uint8_t speed_kmh;
 
     if (send_command("010D\r", 5, buff, 32)){
         fprintf(stderr, "OBDII: Error getting speed.\n");
         return -1;
     }
 
-    sscanf(buff, "41 0D %x", &speed_kmh);
+    sscanf(buff, "41 0D %hhx", &speed_kmh);
     *speed = roundf(speed_kmh * 0.621371);
 
     return 0;
