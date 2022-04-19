@@ -8,6 +8,8 @@
 #include <linux/types.h>
 #include <math.h>
 
+#define PI 3.14159265
+
 // https:#www.invensense.com/wp-content/uploads/2015/02/RM-MPU-9250A-00-v1.6.pdf
 // MPU9250 Default I2C slave address
 #define SLAVE_ADDRESS 0x68

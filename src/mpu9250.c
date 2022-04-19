@@ -257,9 +257,12 @@ void get_heading(char *direction){
     if(read_mag(mag)) {
         strcpy(direction, "NA");
     } else{
-        heading = atan2(mag[0], -mag[1]);
+        heading = atan2(mag[0], -mag[1]) * 180 / PI;
         if (heading < 0)
             heading += 360;
+        heading += 11; // true north
+        if (heading > 360)
+            heading -= 360;
 
         if(heading <= 22.5)
             strcpy(direction, "N");
