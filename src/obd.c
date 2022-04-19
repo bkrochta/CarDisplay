@@ -122,6 +122,33 @@ void get_distance_traveled(int *dst, int *avg_speed){
     *dst = avg_speed[0] * roundf((time.tv_sec - start_time) / 3600.0f);
 }
 
+int attempt_reconnect() {
+    int tries = 0;
+
+    if (connected) {
+        close(serial);
+        connected = 0;
+
+        system("sudo rfcomm unbind 0");
+        sleep(1);
+    }
+
+    while (tries < 5 && init_obd()) {
+        fprintf(stderr, "OBDII: Error reconnecting... Trying again.\n");
+        tries++;
+        sleep(1);
+    } 
+    if (tries == 5){
+        fprintf(stderr, "OBDII: Failed to reconnect.\n");
+        
+        return 1;
+    } else {
+        sleep(1);
+
+        return 0;
+    }
+}
+
 // int main(){
 //     char command[100], buff[100];
 //     int size, speed;
