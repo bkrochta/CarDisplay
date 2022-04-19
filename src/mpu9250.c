@@ -11,7 +11,7 @@ void init_mpu(){
     int cal_data;
     char buff[66];
     if ((bus = open("/dev/i2c-1", O_RDWR)) < 0){
-        printf("Failed to open i2c bus\n");
+        fprintf(stderr, "MPU9250: Failed to open i2c bus\n");
         exit(1);
     }
 
@@ -19,7 +19,7 @@ void init_mpu(){
 
     
     if ((cal_data = open("/home/pi/CarDisplay/calibration_data", O_RDONLY)) < 0){
-        printf("Failed to open calibration data file\n");
+        fprintf(stderr, "MPU9250: Failed to open calibration data file\n");
         exit(3);
     }
     read(cal_data, buff, 65);
@@ -28,7 +28,6 @@ void init_mpu(){
 }
 void config_mpu(__u8 gfs, __u8 afs, __u8 mfs, __u8 mode){
     __u8 data[3];
-    int ret;
     
     if (gfs == GFS_250)
         gres = 250.0/32768.0;
@@ -53,78 +52,86 @@ void config_mpu(__u8 gfs, __u8 afs, __u8 mfs, __u8 mode){
     else //  mfs == AK8963_BIT_16:
         mres = 4912.0/32760.0;
 
-    printf("Configure MPU9250\n");
+    // Configure MPU9250
+
     // printf("reset\n");
     // data[0] = 0x80;
     // if(i2c_write(SLAVE_ADDRESS , PWR_MGMT_1, data, 1)) printf("failed\n");
     // sleep(0.1);
-    printf("sleep off\n");
+    // Sleep off
     data[0] = 0x00;
-    if(i2c_write(SLAVE_ADDRESS , PWR_MGMT_1, data, 1)) printf("failed\n");
+    if(i2c_write(SLAVE_ADDRESS , PWR_MGMT_1, data, 1)){
+        fprintf(stderr, "MPU9250: Failed to turn off sleep");
+    }
     sleep(0.1);
-    ret = i2c_read(SLAVE_ADDRESS , WHO_AM_I, data, 1);
-    printf("%d, %x\n",ret, data[0]);
+    if(i2c_read(SLAVE_ADDRESS , WHO_AM_I, data, 1)){
+        fprintf(stderr, "MPU9250: Failed to get slave address");
+    }
     
-    printf("auto select clock source\n");
+    // auto select clock source
     data[0] = 0x01;
-    if(i2c_write(SLAVE_ADDRESS , PWR_MGMT_1, data, 1)) printf("failed\n");
-    printf("turn on accel and gyro\n");
+    if(i2c_write(SLAVE_ADDRESS , PWR_MGMT_1, data, 1)){
+        fprintf(stderr, "MPU9250: Failed to auto select clock source");
+    }
+    // turn on accel and gyro
     data[0] = 0x00;
-    if(i2c_write(SLAVE_ADDRESS , PWR_MGMT_2, data, 1)) printf("failed\n");
+    if(i2c_write(SLAVE_ADDRESS , PWR_MGMT_2, data, 1)) {
+        fprintf(stderr, "MPU9250: Failed to turn on accel and gyro");
+    }
     sleep(0.1);
 
-    printf("configure accelerometer\n");
-    printf("accel full scale select\n");
+    // Configure accelerometer
+
+    // accel full scale select
     data[0] = afs << 3;
     if(i2c_write(SLAVE_ADDRESS , ACCEL_CONFIG, data, 1)) printf("failed\n");
-    printf("gyro full scale select\n");
+    // gyro full scale select
     data[0] = gfs << 3;
     if(i2c_write(SLAVE_ADDRESS , GYRO_CONFIG, data, 1)) printf("failed\n");
-    printf("A_DLPFCFG internal low pass filter for accelerometer to 10.2 Hz\n");
+    // A_DLPFCFG internal low pass filter for accelerometer to 10.2 Hz
     data[0] = 0x05;
     if(i2c_write(SLAVE_ADDRESS , ACCEL_CONFIG_2, data, 1)) printf("failed\n");
-    printf("DLPF_CFG internal low pass filter for gyroscope to 10 Hz\n");
+    // DLPF_CFG internal low pass filter for gyroscope to 10 Hz
     data[0] = 0x05;
     if(i2c_write(SLAVE_ADDRESS , CONFIG, data, 1)) printf("failed\n");
 
-    printf("sample rate divider\n");
+    // printf("sample rate divider\n");
     //if(i2c_write(SLAVE_ADDRESS , SMPLRT_DIV, 0x04, 1)) printf("failed\n");
 
-    printf("magnetometer allow change to bypass multiplexer\n");
+    // magnetometer allow change to bypass multiplexer
     data[0] = 0x00;
     if(i2c_write(SLAVE_ADDRESS , USER_CTRL, data, 1)) printf("failed\n");
     sleep(0.01);
 
-    printf("BYPASS_EN turn on bypass multiplexer\n");
+    // BYPASS_EN turn on bypass multiplexer
     data[0] = 0x02;
     if(i2c_write(SLAVE_ADDRESS , INT_PIN_CFG, data, 1)) printf("failed\n");
     sleep(0.1);
 
-    printf("set power down mode\n");
+    // set power down mode
     data[0] = 0x00;
     if(i2c_write(AK8963_SLAVE_ADDRESS , AK8963_CNTL1, data, 1)) printf("failed\n");
     sleep(0.1);
 
-    printf("set read FuseROM mode\n");
+    // set read FuseROM mode
     data[0] = 0x1F;
     if(i2c_write(AK8963_SLAVE_ADDRESS , AK8963_CNTL1, data, 1)) printf("failed\n");
     sleep(0.1);
 
-    printf("read coef data\n");
-    ret = i2c_read(AK8963_SLAVE_ADDRESS , AK8963_ASAX, data, 3);
-    printf("%d\n", ret);
+    // read coef data
+    i2c_read(AK8963_SLAVE_ADDRESS , AK8963_ASAX, data, 3);
 
     magXcoef = (data[0] - 128) / 256.0 + 1.0;
     magYcoef = (data[1] - 128) / 256.0 + 1.0;
     magZcoef = (data[2] - 128) / 256.0 + 1.0;
 
-    printf("set power down mode\n");
+    // set power down mode
     data[0] = 0x00;
     if(i2c_write(AK8963_SLAVE_ADDRESS , AK8963_CNTL1, data, 1)) printf("failed\n");
     sleep(0.1);
 
-    printf("set scale&continous mode\n");
-    data[0] = (mfs<<4|mode);
+    // set scale&continous mode
+    data[0] = (mfs << 4 | mode);
     if(i2c_write(AK8963_SLAVE_ADDRESS , AK8963_CNTL1, data, 1)) printf("failed\n");
 
     sleep(0.1);
@@ -134,7 +141,7 @@ int read_accel_raw(__s16 *accel_raw){
     __u8 data[6];
 
     if (i2c_read(SLAVE_ADDRESS , ACCEL_OUT, data, 6)){
-        printf("failed\n");
+        fprintf(stderr, "MPU9250: Failed to read raw accel data\n");
         return 1;
     }
 
@@ -148,8 +155,8 @@ int read_accel_raw(__s16 *accel_raw){
 int read_gyro_raw(__s16 *gyro_raw){
     __u8 data[6];
 
-    if ((i2c_read(SLAVE_ADDRESS , GYRO_OUT, data, 6)) < 0){
-        printf("failed\n");
+    if (i2c_read(SLAVE_ADDRESS , GYRO_OUT, data, 6)){
+        fprintf(stderr, "MPU9250: Failed to read raw gyro data\n");
         return 1;
     }
 
@@ -164,15 +171,15 @@ int read_mag_raw(__s16 *mag_raw){
 
     do {
         if(i2c_read(AK8963_SLAVE_ADDRESS , AK8963_ST1, data, 1)) printf("failed\n");
-    } while (data[0] == 0x00);
+    } while (data[0] == 0x00); // while data not ready, keep trying
 
-    printf("read raw data (little endian)\n");
-    if ((i2c_read(AK8963_SLAVE_ADDRESS , AK8963_MAGNET_OUT, data, 7)) < 0){
-        printf("failed\n");
+    // read raw data (little endian)
+    if (i2c_read(AK8963_SLAVE_ADDRESS , AK8963_MAGNET_OUT, data, 7)){
+        fprintf(stderr, "MPU9250: Failed to read raw mag data\n");
         return 1;
     }
 
-    printf("check overflow\n");
+    // check overflow
     if ((data[6] & 0x08) != 0x08){
         mag_raw[0] = conv_data(data[0], data[1]);
         mag_raw[1] = conv_data(data[2], data[3]);
@@ -287,54 +294,54 @@ __s16 conv_data(__u8 data1, __u8 data2) {
 }
 
 int i2c_read(__u8 slave_addr, __u8 reg_addr, __u8 *data, __u8 length) {
-    int count, ret, tries;
+    int pos, ret, tries;
 
     if (i2c_write(slave_addr, reg_addr, NULL, 0)) {
         return 10;
     }
 
-    count = 0;
+    pos = 0;
     tries = 0;
-
-    while ((count < length) && tries < 5) {
-        if ((ret = read(bus, data + count, length - count)) < 0){
-            printf("Failed to read I2C\n");
+    while ((pos < length) && tries < 5) {
+        if ((ret = read(bus, data + pos, length - pos)) < 0){
+            fprintf(stderr, "MPU9250: Failed to read I2C\n");
             return 8;
         }
-        count += ret;
+        pos += ret;
 
-        if (count == length) break;
+        if (pos == length) break;
 
         sleep(.01);
         tries++;
+        printf("MPU9250: i2c_read tries again.\n");
     }
-    if (count < length){
-        printf("failed to read I2C\n");
+    if (pos < length){
+        fprintf(stderr, "MPU9250: Failed to read I2C: Ran out of tries.\n");
         return 9;
     }
 
     return 0;
 }
 
-int i2c_write(__u8 slave_addr, __u8 reg_addr, __u8 *data, __u8 length){
+int i2c_write(__u8 slave_addr, __u8 reg_addr, __u8 *data, __u8 len){
     __u8 *buff;
 
     if (ioctl(bus, I2C_SLAVE, slave_addr) < 0) {
-        printf("Failed to open slave address\n");
+        fprintf(stderr, "MPU9250: Failed to open slave address\n");
         return 10;
     }
-    if (length == 0){
-        if ((write(bus, &reg_addr, 1)) != 1){
-            printf("Failed to write register\n");
+    if (len == 0) { // write the register address to the bus in order to read from that register
+        if (write(bus, &reg_addr, 1) != 1) {
+            fprintf(stderr, "MPU9250: Failed to write register for reading\n");
             return 11;
         }
-    } else{
-        buff = (__u8 *) calloc(1, length + 1);
+    } else {
+        buff = (__u8 *) calloc(len + 1, 1);
         buff[0] = reg_addr;
-        memcpy(buff + 1, data, length);
+        memcpy(buff + 1, data, len);
 
-        if ((write(bus, buff, length + 1)) != length + 1){
-            printf("Failed to write to register\n");
+        if ((write(bus, buff, len + 1)) != len + 1){
+            fprintf(stderr, "MPU9250: Failed to write to register\n");
             free(buff);
             return 12;
         }
