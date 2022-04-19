@@ -5,6 +5,8 @@
 #include <pthread.h>
 #include <stdlib.h>
 
+#define LAYOUT_FILE "layout.glade"
+
 struct update_data{
     GtkWidget *direction, *time, *temp, *speed, *a_speed, *dst;
 } ;
