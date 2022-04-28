@@ -35,7 +35,7 @@ int main(int argc, char **argv){
     pthread_create(&thread_compass, NULL, compass_thread, NULL);
     data = (struct update_data) {direction, time, temp, speed, a_speed, dst};
     g_timeout_add(100, update, (gpointer)&data);
-    gtk_widget_show (window);
+    gtk_widget_show_all(window);
     gtk_main();
 
     pthread_mutex_destroy(&mutex_therm);
@@ -83,7 +83,7 @@ void *obd_thread(void *args){
         get_average_speed(&average_speed, &current_speed);
         get_distance_traveled(&distance_traveled, &current_speed);
         pthread_mutex_unlock(&mutex_obd);
-        sleep(.1);
+        usleep(33300);
     }
     system("sudo rfcomm unbind 0");
     return NULL;
@@ -110,6 +110,7 @@ int update(gpointer labels){
     fscanf(fp, "%[^\n]s", temp);
     pclose(fp);
     gtk_label_set_text(GTK_LABEL(data->time), temp);
+    // printf("time: %s ", temp);
     memset(temp, 0, 10);
 
 
@@ -117,11 +118,13 @@ int update(gpointer labels){
     snprintf(temp, 10, "%d", temperature);
     pthread_mutex_unlock(&mutex_therm);
     gtk_label_set_text(GTK_LABEL(data->temp), temp);
+    // printf("temp: %s ", temp);
     memset(temp, 0, 10);
 
 
     pthread_mutex_lock(&mutex_compass);
     gtk_label_set_text(GTK_LABEL(data->direction), curr_direction);
+    // printf("direction: %s ", curr_direction);
     pthread_mutex_unlock(&mutex_compass);
 
 
@@ -129,11 +132,15 @@ int update(gpointer labels){
     snprintf(temp, 10, "%d", current_speed);
     snprintf(temp1, 10, "%d", average_speed);
     snprintf(temp2, 10, "%d", distance_traveled);
+    // printf("speed: %s\n", temp);
     pthread_mutex_unlock(&mutex_obd);
     gtk_label_set_text(GTK_LABEL(data->speed), temp);
     gtk_label_set_text(GTK_LABEL(data->a_speed), temp1);
     gtk_label_set_text(GTK_LABEL(data->dst), temp2);
 
     
+    // static int number = 0;
+    // number++;
+    // if (number>100) {gtk_main_quit (); return FALSE;}
     return TRUE;
 }

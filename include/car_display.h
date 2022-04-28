@@ -5,7 +5,7 @@
 #include <pthread.h>
 #include <stdlib.h>
 
-#define LAYOUT_FILE "layout.glade"
+#define LAYOUT_FILE "/home/pi/CarDisplay1/layout.glade"
 
 struct update_data{
     GtkWidget *direction, *time, *temp, *speed, *a_speed, *dst;
