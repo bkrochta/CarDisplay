@@ -22,9 +22,12 @@ int init_obd(){
         fprintf(stderr, "OBDII: Error from tcgetattr\n");
         return 2;
     }
-    tty.c_cflag &= ~PARENB;
-    tty.c_cflag &= ~CSTOPB;
-    tty.c_cflag |= CS8;
+    fcntl(serial, F_SETFL, 0);
+    tty.c_cflag |= (CLOCAL | CREAD);
+    tty.c_lflag &= !(ICANON | ECHO | ECHOE | ISIG);
+    tty.c_oflag &= !(OPOST);
+    tty.c_cc[VMIN] = 1;
+    tty.c_cc[VTIME] = 5; 
     cfsetispeed(&tty, B38400);
     cfsetospeed(&tty, B38400);
     if(tcsetattr(serial, TCSANOW, &tty) != 0){
@@ -33,6 +36,7 @@ int init_obd(){
     }
     // initialize
     // reset
+    tcflush(serial, TCIOFLUSH);
     if(send_command("ATZ\r", 4, resp, 256)){
         return 4;
     }
