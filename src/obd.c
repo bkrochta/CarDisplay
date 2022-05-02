@@ -108,14 +108,14 @@ int get_speed(int *speed){
     return 0;
 }
 
-void get_average_speed(int *avg_speed, int *curr_speed){
+void get_average_speed(double *avg_speed, int *curr_speed){
     static int count = 0;
 
     *avg_speed = ((avg_speed[0] * count) + curr_speed[0]) / (count + 1);
     count++;
 }
 
-void get_distance_traveled(int *dst, int *avg_speed){
+void get_distance_traveled(double *dst, double *avg_speed){
     struct timespec time;
     clock_gettime(CLOCK_MONOTONIC,&time);
     static long start_time = 0;
@@ -123,7 +123,7 @@ void get_distance_traveled(int *dst, int *avg_speed){
     if (start_time == 0){
         start_time = time.tv_sec;
     }
-    *dst = avg_speed[0] * roundf((time.tv_sec - start_time) / 3600.0f);
+    *dst = avg_speed[0] * ((time.tv_sec - start_time) / 3600.0);
 }
 
 int attempt_reconnect() {

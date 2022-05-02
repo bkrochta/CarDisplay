@@ -4,6 +4,7 @@
 #include <gtk/gtk.h>
 #include <pthread.h>
 #include <stdlib.h>
+#include <math.h>
 
 #define LAYOUT_FILE "/home/pi/CarDisplay1/layout.glade"
 

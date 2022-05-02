@@ -1,7 +1,8 @@
 #include "car_display.h"
 
 pthread_mutex_t mutex_therm, mutex_obd, mutex_compass;
-int run=1, temperature, current_speed, average_speed, distance_traveled;
+int run=1, temperature, current_speed;
+double average_speed, distance_traveled;
 char curr_direction[3];
 
 int main(int argc, char **argv){
@@ -130,8 +131,8 @@ int update(gpointer labels){
 
     pthread_mutex_lock(&mutex_obd);
     snprintf(temp, 10, "%d", current_speed);
-    snprintf(temp1, 10, "%d", average_speed);
-    snprintf(temp2, 10, "%d", distance_traveled);
+    snprintf(temp1, 10, "%d", (int) round(average_speed));
+    snprintf(temp2, 10, "%d", (int) floor(distance_traveled));
     // printf("speed: %s\n", temp);
     pthread_mutex_unlock(&mutex_obd);
     gtk_label_set_text(GTK_LABEL(data->speed), temp);
