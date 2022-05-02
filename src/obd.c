@@ -137,7 +137,7 @@ int attempt_reconnect() {
         sleep(1);
     }
 
-    while (tries < 5 && init_obd()) {
+    while (tries < 10 && init_obd()) {
         fprintf(stderr, "OBDII: Error reconnecting... Trying again.\n");
         tries++;
         sleep(1);
