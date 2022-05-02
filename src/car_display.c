@@ -82,7 +82,7 @@ void *obd_thread(void *args){
             }
         }
         get_average_speed(&average_speed, &current_speed);
-        get_distance_traveled(&distance_traveled, &current_speed);
+        get_distance_traveled(&distance_traveled, &average_speed);
         pthread_mutex_unlock(&mutex_obd);
         usleep(33300);
     }
