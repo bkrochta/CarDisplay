@@ -1,70 +1,117 @@
 #include "car_display.h"
 
-pthread_mutex_t mutex_therm, mutex_obd, mutex_compass;
-int run=1, temperature, current_speed;
-double average_speed, distance_traveled;
-char curr_direction[3];
+atomic_bool run = 1;
+struct GuiLabels labels;
+pthread_t thread_therm, thread_obd, thread_compass;
 
 int main(int argc, char **argv){
-    GtkWidget *window, *direction, *time, *temp, *speed, *a_speed, *dst;
-    pthread_t thread_therm, thread_obd, thread_compass;
-    struct update_data data;
-    GdkRGBA color = {0,0,0,1};
+    GtkWidget *window;
     GtkBuilder *builder;
+    GtkCssProvider *cssProvider;
+    GtkStyleContext *context;
 
     gtk_init(&argc, &argv);
-
     builder = gtk_builder_new();
     gtk_builder_add_from_file(builder, LAYOUT_FILE, NULL);
 
     window = GTK_WIDGET(gtk_builder_get_object (builder, "window"));
 
-    direction = GTK_WIDGET(gtk_builder_get_object (builder, "dir_label"));
-    time = GTK_WIDGET(gtk_builder_get_object (builder, "clock_label"));
-    temp = GTK_WIDGET(gtk_builder_get_object (builder, "temp_label"));
-    speed = GTK_WIDGET(gtk_builder_get_object (builder, "speed_label"));
-    a_speed = GTK_WIDGET(gtk_builder_get_object (builder, "avg_speed_label"));
-    dst = GTK_WIDGET(gtk_builder_get_object (builder, "dst_traveled_label"));
+    labels = (struct GuiLabels) {
+        GTK_WIDGET(gtk_builder_get_object(builder, "dir_label")),
+        GTK_WIDGET(gtk_builder_get_object(builder, "clock_label")),
+        GTK_WIDGET(gtk_builder_get_object(builder, "temp_label")),
+        GTK_WIDGET(gtk_builder_get_object(builder, "speed_label")),
+        GTK_WIDGET(gtk_builder_get_object(builder, "avg_speed_label")),
+        GTK_WIDGET(gtk_builder_get_object(builder, "dst_traveled_label"))
+    };
 
-    gtk_widget_override_background_color(GTK_WIDGET(window), GTK_STATE_NORMAL, &color);
+    cssProvider = gtk_css_provider_new();
+    gtk_css_provider_load_from_data(cssProvider, "* { background-image:none; background-color:black;}",-1,NULL);
+    context = gtk_widget_get_style_context(window); 
+    gtk_style_context_add_provider(context, GTK_STYLE_PROVIDER(cssProvider),GTK_STYLE_PROVIDER_PRIORITY_USER);
     
-    pthread_mutex_init(&mutex_therm, NULL);
-    pthread_mutex_init(&mutex_obd, NULL);
-    pthread_mutex_init(&mutex_compass, NULL);
     pthread_create(&thread_therm, NULL, thermometer_thread, NULL);
     pthread_create(&thread_obd, NULL, obd_thread, NULL);
     pthread_create(&thread_compass, NULL, compass_thread, NULL);
-    data = (struct update_data) {direction, time, temp, speed, a_speed, dst};
-    g_timeout_add(100, update, (gpointer)&data);
+
+    g_signal_connect(window, "key_press_event", G_CALLBACK(check_escape), NULL);
+    g_timeout_add(200, update_clock_gui, NULL);
     gtk_widget_show_all(window);
     gtk_main();
-
-    pthread_mutex_destroy(&mutex_therm);
-    pthread_mutex_destroy(&mutex_obd);
-    pthread_mutex_destroy(&mutex_compass);
-
 
     return 0;
 }
 
+gboolean check_escape(GtkWidget *widget, GdkEventKey *event, gpointer data){
+    if (event->keyval == GDK_KEY_Escape) {
+        run = 0;
+        pthread_join(thread_compass, NULL);
+        pthread_join(thread_obd, NULL);
+        pthread_join(thread_therm, NULL);
+
+        gtk_main_quit();
+        return TRUE;
+    }
+    return FALSE;
+}
+
+gboolean update_thermometer_gui(gpointer update_data){
+    char temp[4] = {0};
+    int *temperature = (int *) update_data;
+
+    snprintf(temp, 4, "%d", *temperature);
+    gtk_label_set_text(GTK_LABEL(labels.temp), temp);
+    free(temperature);
+
+    return G_SOURCE_REMOVE;
+}
+
 void *thermometer_thread(void *args){
-    int ret;
+    int ret, *temp;
 
     init_therm();
 
     while(run){
-        pthread_mutex_lock(&mutex_therm);
-        ret = get_temp(&temperature);
-        if (ret) temperature = 0;
-        pthread_mutex_unlock(&mutex_therm);
+        temp = malloc(sizeof(int));
+        ret = get_temp(temp);
+        if (ret) {
+            *temp = 0;
+        }
 
-        if (ret) sleep(10);
-        else sleep(5);
+        if (ret) {
+            sleep(10);
+        } else {
+            sleep(5);
+        }
+        gdk_threads_add_idle(update_obd_gui, (gpointer *) temp);
+
     }
     return NULL;
 }
 
+gboolean update_obd_gui(gpointer update_data){
+    struct ObdData *data = (struct ObdData *) update_data;
+    char temp[4] = {0};
+
+    snprintf(temp, 4, "%d", data->speed);
+    gtk_label_set_text(GTK_LABEL(labels.speed), temp);
+    memset(temp, 0, 4);
+
+    snprintf(temp, 4, "%d", (int) round(data->avg_speed));
+    gtk_label_set_text(GTK_LABEL(labels.a_speed), temp);
+    memset(temp, 0, 4);
+
+    snprintf(temp, 4, "%d", (int) floor(data->dst));
+    gtk_label_set_text(GTK_LABEL(labels.dst), temp);
+
+    free(data);
+
+    return G_SOURCE_REMOVE;
+}
+
 void *obd_thread(void *args){
+    struct ObdData *data;
+    double prev_avg = 0;
 
     if (init_obd()){
         if (attempt_reconnect()) {
@@ -73,75 +120,56 @@ void *obd_thread(void *args){
     }
 
     while(run){
-        pthread_mutex_lock(&mutex_obd);
-        if (get_speed(&current_speed)) {
+        data = (struct ObdData *) malloc(sizeof(struct ObdData));
+        if (get_speed(&data->speed)) {
             if (attempt_reconnect()) {
                 break;
             } else {
-                get_speed(&current_speed);
+                get_speed(&data->speed);
             }
         }
-        get_average_speed(&average_speed, &current_speed);
-        get_distance_traveled(&distance_traveled, &average_speed);
-        pthread_mutex_unlock(&mutex_obd);
+        data->avg_speed = prev_avg;
+        get_average_speed(&data->avg_speed, &data->speed);
+        get_distance_traveled(&data->dst, &data->avg_speed);
+        prev_avg = data->avg_speed;
+        gdk_threads_add_idle(update_obd_gui, (gpointer *) data);
         usleep(33300);
     }
     system("sudo rfcomm unbind 0");
     return NULL;
 }
 
+gboolean update_compass_gui(gpointer update_data){
+    char *direction = (char *) update_data;
+
+    gtk_label_set_text(GTK_LABEL(labels.direction), direction);
+    free(direction);
+
+    return G_SOURCE_REMOVE;
+}
+
 void *compass_thread(void *args){
+    char *direction;
     init_mpu();
 
     while(run){
-        pthread_mutex_lock(&mutex_compass);
-        get_heading(curr_direction);
-        pthread_mutex_unlock(&mutex_compass);
+        direction = calloc(3,1);
+        
+        get_heading(direction);
+        gdk_threads_add_idle(update_compass_gui, (gpointer *) direction);
         sleep(1);
     }
     return NULL;
 }
 
-int update(gpointer labels){
-    char temp[10] = {0}, temp1[10] = {0}, temp2[10] = {0};
-    struct update_data *data = (struct update_data *) labels;
+gboolean update_clock_gui(gpointer update_data){
+    char temp[6] = {0};
     FILE *fp;
 
     fp = popen("date +\"%-I:%M\"","r");
     fscanf(fp, "%[^\n]s", temp);
     pclose(fp);
-    gtk_label_set_text(GTK_LABEL(data->time), temp);
-    // printf("time: %s ", temp);
-    memset(temp, 0, 10);
+    gtk_label_set_text(GTK_LABEL(labels.time), temp);
 
-
-    pthread_mutex_lock(&mutex_therm);
-    snprintf(temp, 10, "%d", temperature);
-    pthread_mutex_unlock(&mutex_therm);
-    gtk_label_set_text(GTK_LABEL(data->temp), temp);
-    // printf("temp: %s ", temp);
-    memset(temp, 0, 10);
-
-
-    pthread_mutex_lock(&mutex_compass);
-    gtk_label_set_text(GTK_LABEL(data->direction), curr_direction);
-    // printf("direction: %s ", curr_direction);
-    pthread_mutex_unlock(&mutex_compass);
-
-
-    pthread_mutex_lock(&mutex_obd);
-    snprintf(temp, 10, "%d", current_speed);
-    snprintf(temp1, 10, "%d", (int) round(average_speed));
-    snprintf(temp2, 10, "%d", (int) floor(distance_traveled));
-    // printf("speed: %s\n", temp);
-    pthread_mutex_unlock(&mutex_obd);
-    gtk_label_set_text(GTK_LABEL(data->speed), temp);
-    gtk_label_set_text(GTK_LABEL(data->a_speed), temp1);
-    gtk_label_set_text(GTK_LABEL(data->dst), temp2);
-
-    
-    // static int number = 0;
-    // number++;
-    // if (number>100) {gtk_main_quit (); return FALSE;}
-    return TRUE;
+    return G_SOURCE_CONTINUE;
 }

@@ -9,6 +9,12 @@
 
 #define ELM_ADDRESS "00:1D:A5:00:48:7A"
 
+struct ObdData {
+    int speed;
+    double avg_speed;
+    double dst;
+} ;
+
 int init_obd();
 int get_speed(int *speed);
 void get_average_speed(double *avg_speed, int *curr_speed);
