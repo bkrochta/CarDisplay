@@ -64,7 +64,7 @@ void config_mpu(__u8 gfs, __u8 afs, __u8 mfs, __u8 mode){
     if(i2c_write(SLAVE_ADDRESS , PWR_MGMT_1, data, 1)){
         fprintf(stderr, "MPU9250: Failed to turn off sleep");
     }
-    sleep(0.1);
+    // sleep(0.1);
     if(i2c_read(SLAVE_ADDRESS , WHO_AM_I, data, 1)){
         fprintf(stderr, "MPU9250: Failed to get slave address");
     }
@@ -79,7 +79,7 @@ void config_mpu(__u8 gfs, __u8 afs, __u8 mfs, __u8 mode){
     if(i2c_write(SLAVE_ADDRESS , PWR_MGMT_2, data, 1)) {
         fprintf(stderr, "MPU9250: Failed to turn on accel and gyro");
     }
-    sleep(0.1);
+    // sleep(0.1);
 
     // Configure accelerometer
 
@@ -102,22 +102,22 @@ void config_mpu(__u8 gfs, __u8 afs, __u8 mfs, __u8 mode){
     // magnetometer allow change to bypass multiplexer
     data[0] = 0x00;
     if(i2c_write(SLAVE_ADDRESS , USER_CTRL, data, 1)) printf("failed\n");
-    sleep(0.01);
+    // sleep(0.01);
 
     // BYPASS_EN turn on bypass multiplexer
     data[0] = 0x02;
     if(i2c_write(SLAVE_ADDRESS , INT_PIN_CFG, data, 1)) printf("failed\n");
-    sleep(0.1);
+    // sleep(0.1);
 
     // set power down mode
     data[0] = 0x00;
     if(i2c_write(AK8963_SLAVE_ADDRESS , AK8963_CNTL1, data, 1)) printf("failed\n");
-    sleep(0.1);
+    // sleep(0.1);
 
     // set read FuseROM mode
     data[0] = 0x1F;
     if(i2c_write(AK8963_SLAVE_ADDRESS , AK8963_CNTL1, data, 1)) printf("failed\n");
-    sleep(0.1);
+    // sleep(0.1);
 
     // read coef data
     i2c_read(AK8963_SLAVE_ADDRESS , AK8963_ASAX, data, 3);
@@ -129,13 +129,13 @@ void config_mpu(__u8 gfs, __u8 afs, __u8 mfs, __u8 mode){
     // set power down mode
     data[0] = 0x00;
     if(i2c_write(AK8963_SLAVE_ADDRESS , AK8963_CNTL1, data, 1)) printf("failed\n");
-    sleep(0.1);
+    // sleep(0.1);
 
     // set scale&continous mode
     data[0] = (mfs << 4 | mode);
     if(i2c_write(AK8963_SLAVE_ADDRESS , AK8963_CNTL1, data, 1)) printf("failed\n");
 
-    sleep(0.1);
+    // sleep(0.1);
 }
 
 int read_accel_raw(__s16 *accel_raw){
@@ -315,7 +315,7 @@ int i2c_read(__u8 slave_addr, __u8 reg_addr, __u8 *data, __u8 length) {
 
         if (pos == length) break;
 
-        sleep(.01);
+        // sleep(.01);
         tries++;
         printf("MPU9250: i2c_read tries again.\n");
     }
