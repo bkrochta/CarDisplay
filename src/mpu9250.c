@@ -9,7 +9,7 @@ int bus;
 
 void init_mpu(){
     int cal_data;
-    char buff[66];
+    char buff[66] = {0};
     if ((bus = open("/dev/i2c-1", O_RDWR)) < 0){
         fprintf(stderr, "MPU9250: Failed to open i2c bus\n");
         exit(1);
@@ -24,6 +24,7 @@ void init_mpu(){
     }
     read(cal_data, buff, 65);
     sscanf(buff,"%f,%f,%f,%f,%f,%f", &mag_scale[0], &mag_scale[1], &mag_scale[2], &mag_bias[0], &mag_bias[1], &mag_bias[2]);
+    close(cal_data);
     
 }
 void config_mpu(__u8 gfs, __u8 afs, __u8 mfs, __u8 mode){
