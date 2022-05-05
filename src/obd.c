@@ -142,7 +142,7 @@ int attempt_reconnect() {
         tries++;
         sleep(1);
     } 
-    if (tries == 5){
+    if (tries == 10){
         fprintf(stderr, "OBDII: Failed to reconnect.\n");
         
         return 1;
